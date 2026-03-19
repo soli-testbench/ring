@@ -29,7 +29,7 @@ jobs:
       BASE_BRANCH: main
       REVIEW_BRANCH: ${{ inputs.branch }}
       TASK_ID: ${{ inputs.task_id }}
-      SECURITY_INTENT_REVIEW_BASE_URL: ${{ secrets.SECURITY_INTENT_REVIEW_BASE_URL }}
+      SECURITY_INTENT_REVIEW_BASE_URL: ${{ vars.SECURITY_INTENT_REVIEW_BASE_URL }}
       SECURITY_INTENT_REVIEW_API_KEY: ${{ secrets.INTERNAL_API_KEY }}
       SECURITY_REVIEW_FAIL_ON: needs_review
     steps:
