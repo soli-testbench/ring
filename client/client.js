@@ -22,6 +22,8 @@ window.addEventListener('resize', resizeCanvas);
 const statusText = document.getElementById('status-text');
 const infoText = document.getElementById('info-text');
 const hpBar = document.getElementById('hp-bar');
+const nicknameInput = document.getElementById('nickname-input');
+const nicknameSetBtn = document.getElementById('nickname-set');
 
 // --- Game state ---
 let ws = null;
@@ -38,6 +40,7 @@ let aimAngle = 0;
 
 // --- Input handlers ---
 window.addEventListener('keydown', (e) => {
+  if (document.activeElement === nicknameInput) return;
   switch (e.key.toLowerCase()) {
     case 'w': keys.up = true; break;
     case 's': keys.down = true; break;
@@ -47,6 +50,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('keyup', (e) => {
+  if (document.activeElement === nicknameInput) return;
   switch (e.key.toLowerCase()) {
     case 'w': keys.up = false; break;
     case 's': keys.down = false; break;
@@ -366,10 +370,10 @@ function drawStickFigure(player, scale, cx, cy) {
   }
 
   // Name label
-  ctx.font = `${Math.max(10, r * 0.5)}px monospace`;
+  ctx.font = `${Math.max(8, r * 0.35)}px monospace`;
   ctx.fillStyle = isMe ? '#4fc' : '#aaa';
   ctx.textAlign = 'center';
-  ctx.fillText(player.name, px, py + r * 1.1);
+  ctx.fillText(player.name, px, py + r * 1.3);
 
   ctx.restore();
 }
@@ -394,6 +398,7 @@ controlsOverlay.addEventListener('click', (e) => {
 controlsHint.addEventListener('click', showControls);
 
 window.addEventListener('keydown', (e) => {
+  if (document.activeElement === nicknameInput) return;
   if (e.key.toLowerCase() === 'h') {
     if (controlsOverlay.style.display === 'none') {
       showControls();
@@ -404,6 +409,19 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     dismissControls();
   }
+});
+
+// --- Nickname submission ---
+function submitNickname() {
+  const name = nicknameInput.value.trim();
+  if (!name || !ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({ type: 'set_name', name }));
+  nicknameInput.blur();
+}
+
+nicknameSetBtn.addEventListener('click', submitNickname);
+nicknameInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') submitNickname();
 });
 
 requestAnimationFrame(render);

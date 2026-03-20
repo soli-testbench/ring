@@ -482,6 +482,78 @@ test('Shoot cooldown prevents rapid fire', () => {
   assert(game.bullets.length === 1, 'second shot blocked by cooldown');
 });
 
+// --- setPlayerName Tests ---
+
+test('setPlayerName accepts valid nickname', () => {
+  const game = new Game();
+  const mockWs = { readyState: 1, send: () => {} };
+  const id = game.addPlayer(mockWs);
+  game.setPlayerName(id, 'TestUser');
+  assert(game.players.get(id).name === 'TestUser', 'name set to TestUser');
+});
+
+test('setPlayerName trims whitespace', () => {
+  const game = new Game();
+  const mockWs = { readyState: 1, send: () => {} };
+  const id = game.addPlayer(mockWs);
+  game.setPlayerName(id, '  Spacey  ');
+  assert(game.players.get(id).name === 'Spacey', 'whitespace trimmed');
+});
+
+test('setPlayerName truncates names longer than 16 characters', () => {
+  const game = new Game();
+  const mockWs = { readyState: 1, send: () => {} };
+  const id = game.addPlayer(mockWs);
+  game.setPlayerName(id, 'ThisNameIsWayTooLongForTheLimit');
+  assert(game.players.get(id).name.length <= 16, 'name truncated to 16 chars');
+  assert(game.players.get(id).name === 'ThisNameIsWayToo', 'truncated correctly');
+});
+
+test('setPlayerName falls back to default for empty string', () => {
+  const game = new Game();
+  const mockWs = { readyState: 1, send: () => {} };
+  const id = game.addPlayer(mockWs);
+  game.setPlayerName(id, '');
+  assert(game.players.get(id).name === `Player ${id}`, 'falls back to default');
+});
+
+test('setPlayerName falls back to default for whitespace-only string', () => {
+  const game = new Game();
+  const mockWs = { readyState: 1, send: () => {} };
+  const id = game.addPlayer(mockWs);
+  game.setPlayerName(id, '   ');
+  assert(game.players.get(id).name === `Player ${id}`, 'falls back to default for whitespace');
+});
+
+test('setPlayerName falls back to default for non-string input', () => {
+  const game = new Game();
+  const mockWs = { readyState: 1, send: () => {} };
+  const id = game.addPlayer(mockWs);
+  game.setPlayerName(id, 12345);
+  assert(game.players.get(id).name === `Player ${id}`, 'falls back to default for number');
+  game.setPlayerName(id, null);
+  assert(game.players.get(id).name === `Player ${id}`, 'falls back to default for null');
+  game.setPlayerName(id, undefined);
+  assert(game.players.get(id).name === `Player ${id}`, 'falls back to default for undefined');
+});
+
+test('setPlayerName name appears in game state', () => {
+  const game = new Game();
+  const mockWs = { readyState: 1, send: () => {} };
+  const id = game.addPlayer(mockWs);
+  game.setPlayerName(id, 'Hero');
+  const state = game.getState(id);
+  const playerState = state.players.find(p => p.id === id);
+  assert(playerState.name === 'Hero', 'custom name in serialized state');
+});
+
+test('setPlayerName does nothing for invalid player ID', () => {
+  const game = new Game();
+  // Should not throw
+  game.setPlayerName(9999, 'Ghost');
+  assert(true, 'no error for invalid player ID');
+});
+
 // --- Property-based tests over many random seeds ---
 
 test('Property: generated polygons are always convex (100 seeds)', () => {

@@ -135,12 +135,54 @@
     #controls-hint:hover {
       color: #aaa;
     }
+    #nickname-container {
+      position: absolute;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #nickname-input {
+      background: #1a1a2e;
+      border: 1px solid #555;
+      border-radius: 4px;
+      color: #eee;
+      font-family: monospace;
+      font-size: 13px;
+      padding: 4px 8px;
+      width: 140px;
+      outline: none;
+    }
+    #nickname-input:focus {
+      border-color: #4fc;
+    }
+    #nickname-set {
+      background: #4fc;
+      color: #111;
+      border: none;
+      padding: 4px 10px;
+      font-family: monospace;
+      font-size: 13px;
+      font-weight: bold;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #nickname-set:hover {
+      background: #3eb;
+    }
   </style>
 </head>
 <body>
   <div id="hud">
     <div class="status" id="status-text">Connecting...</div>
     <div class="info" id="info-text"></div>
+  </div>
+  <div id="nickname-container">
+    <input type="text" id="nickname-input" maxlength="16" placeholder="Enter nickname...">
+    <button id="nickname-set">Set</button>
   </div>
   <canvas id="game"></canvas>
   <div id="hp-text">HP</div>

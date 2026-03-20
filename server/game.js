@@ -295,6 +295,17 @@ class Game {
     player.lastShot = 0;
   }
 
+  setPlayerName(playerId, name) {
+    const player = this.players.get(playerId);
+    if (!player) return;
+    if (typeof name !== 'string') {
+      player.name = `Player ${playerId}`;
+      return;
+    }
+    const trimmed = name.trim().slice(0, 16);
+    player.name = trimmed || `Player ${playerId}`;
+  }
+
   handleInput(playerId, input) {
     const player = this.players.get(playerId);
     if (!player || !player.alive || this.spectators.has(playerId)) return;

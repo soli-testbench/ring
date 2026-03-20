@@ -87,6 +87,8 @@ wss.on('connection', (ws) => {
       const msg = JSON.parse(data);
       if (msg.type === 'input') {
         game.handleInput(playerId, msg);
+      } else if (msg.type === 'set_name') {
+        game.setPlayerName(playerId, msg.name);
       }
     } catch (e) {
       // ignore malformed messages
