@@ -3,11 +3,17 @@
 // --- Canvas setup ---
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
+let canvasSize = 0;
 
 function resizeCanvas() {
   const size = Math.min(window.innerWidth - 20, window.innerHeight - 80);
-  canvas.width = size;
-  canvas.height = size;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = size * dpr;
+  canvas.height = size * dpr;
+  canvas.style.width = size + 'px';
+  canvas.style.height = size + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  canvasSize = size;
 }
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
@@ -25,8 +31,8 @@ let arenaRadius = 500;
 
 // --- Input state ---
 const keys = { up: false, down: false, left: false, right: false };
-let mouseX = canvas.width / 2;
-let mouseY = canvas.height / 2;
+let mouseX = canvasSize / 2;
+let mouseY = canvasSize / 2;
 let mouseDown = false;
 let aimAngle = 0;
 
@@ -110,9 +116,9 @@ function sendInput() {
     : null;
 
   if (me) {
-    const scale = canvas.width / (arenaRadius * 2.2);
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
+    const scale = canvasSize / (arenaRadius * 2.2);
+    const cx = canvasSize / 2;
+    const cy = canvasSize / 2;
     const screenX = cx + me.x * scale;
     const screenY = cy + me.y * scale;
     aimAngle = Math.atan2(mouseY - screenY, mouseX - screenX);
@@ -184,20 +190,20 @@ function updateHUD() {
 // --- Render loop ---
 function render() {
   ctx.fillStyle = '#111';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0, 0, canvasSize, canvasSize);
 
   if (!gameState) {
     ctx.fillStyle = '#666';
     ctx.font = '20px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('Connecting...', canvas.width / 2, canvas.height / 2);
+    ctx.fillText('Connecting...', canvasSize / 2, canvasSize / 2);
     requestAnimationFrame(render);
     return;
   }
 
-  const scale = canvas.width / (arenaRadius * 2.2);
-  const cx = canvas.width / 2;
-  const cy = canvas.height / 2;
+  const scale = canvasSize / (arenaRadius * 2.2);
+  const cx = canvasSize / 2;
+  const cy = canvasSize / 2;
 
   // Draw arena background (dark circle)
   ctx.beginPath();
@@ -228,16 +234,16 @@ function render() {
   ctx.strokeStyle = '#222';
   ctx.lineWidth = 0.5;
   const gridStep = 100 * scale;
-  for (let gx = cx % gridStep; gx < canvas.width; gx += gridStep) {
+  for (let gx = cx % gridStep; gx < canvasSize; gx += gridStep) {
     ctx.beginPath();
     ctx.moveTo(gx, 0);
-    ctx.lineTo(gx, canvas.height);
+    ctx.lineTo(gx, canvasSize);
     ctx.stroke();
   }
-  for (let gy = cy % gridStep; gy < canvas.height; gy += gridStep) {
+  for (let gy = cy % gridStep; gy < canvasSize; gy += gridStep) {
     ctx.beginPath();
     ctx.moveTo(0, gy);
-    ctx.lineTo(canvas.width, gy);
+    ctx.lineTo(canvasSize, gy);
     ctx.stroke();
   }
 

@@ -1,35 +1,33 @@
 # Integration Summary
 
 ## Plan Branch
-agent/18caef05-e1ed-4361-b047-913650f0ad18
+agent/bedfc129-0b59-45f3-993d-3c102786ef86
 ## Upstream Repository
 soli-testbench/ring
 
 ## Suggested PR Title
-feat(client): add controls dialog overlay
+feat(client): add HiDPI canvas rendering for crisp high-resolution display
 
 ## Suggested PR Description
 ## Summary
-- Added a dismissible controls overlay that appears when the game first loads, showing WASD movement, mouse aiming, and click-to-shoot instructions
-- Dialog can be dismissed via "Got it" button, clicking the backdrop, Escape key, or H key
-- WebSocket connection initializes in the background without being blocked by the dialog
-- Visual style uses monospace font and dark color scheme consistent with the existing game aesthetic
-- Added a persistent "Press H for controls" hint so players can re-open the dialog at any time
 
-## Acceptance Criteria
-- [x] Controls dialog displayed prominently on page load
-- [x] WASD / Mouse / Click controls clearly communicated
-- [x] Dismissible via button, backdrop click, Escape, or H key
-- [x] Does not reappear after dismissal (unless user explicitly presses H)
-- [x] Does not block WebSocket or game initialization
-- [x] Consistent with low-fidelity monospace aesthetic
+- Applied standard Canvas HiDPI fix using `window.devicePixelRatio` to scale the canvas backing buffer to native display resolution
+- Added `canvasSize` variable to track logical CSS dimensions separately from physical buffer dimensions
+- Modified `resizeCanvas()` to set backing buffer to `size * dpr`, apply CSS dimensions, and scale the 2D context transform
+- Updated all rendering and input coordinate calculations to use logical `canvasSize` instead of physical `canvas.width/height`
 
-## Test plan
-- [x] All 44 existing game tests pass
-- [ ] Manual: Open game in browser and verify overlay appears
-- [ ] Manual: Click "Got it" to dismiss, verify it stays dismissed
-- [ ] Manual: Press H to re-open, Escape to close
-- [ ] Manual: Verify game connects to server while overlay is shown
+## What Changed
+
+The game canvas was rendering at CSS pixel resolution, causing the browser to upscale a low-resolution buffer on high-DPI displays (Retina, etc.). This made the map, players, text, and all visual elements appear fuzzy/blurry.
+
+The fix multiplies the canvas backing buffer by `devicePixelRatio` and applies a context transform so all drawing operations automatically render at native resolution. No visual layout changes — the game looks identical but sharper.
+
+## Test Plan
+
+- [x] All 44 existing server-side tests pass
+- [x] Only `client/client.js` modified — server logic untouched
+- [x] Mouse input coordinates verified correct (uses `getBoundingClientRect` which returns CSS coords)
+- [x] Verified no remaining `canvas.width/height` references in rendering code
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
@@ -37,12 +35,6 @@ feat(client): add controls dialog overlay
 
 ## Original Task
 
-**Description**: Display an informational controls dialog/overlay when a user first opens the game. The dialog should clearly show the game controls: WASD for movement, mouse cursor for aiming, and left-click to shoot. The dialog should be dismissible (e.g., click anywhere, press any key, or click a close button) so the player can start playing. This is a client-side only change — no server modifications needed.
+**Description**: The game map and the players and the text are low resolution. Can you make them higher resolution, please? They look pretty fuzzy. 
 
 **Acceptance Criteria**:
-1. When a user opens the game in their browser, a controls dialog/overlay is displayed prominently on screen.
-2. The dialog clearly communicates: WASD for movement, mouse for aiming, click to shoot.
-3. The dialog can be dismissed by the user (via click, keypress, or close button).
-4. After dismissal, the dialog does not reappear during the same session.
-5. The dialog does not block WebSocket connection or game state initialization (game connects in the background).
-6. The dialog visual style is consistent with the existing low-fidelity/monospace aesthetic of the game.
