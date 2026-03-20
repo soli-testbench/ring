@@ -1,64 +1,130 @@
-# Plan: Make Game + Map Higher Resolution
+# Implementation Plan: Dynamic Maps with Randomly Generated Arena Shapes
 
-## Problem
+## Overview
 
-The game canvas renders fuzzy/blurry on high-DPI (Retina) displays. This is the classic HTML5 Canvas resolution problem — the canvas backing buffer matches CSS pixels rather than device pixels, causing the browser to upscale a low-resolution buffer.
+Replace the static circular arena in Ring - Battle Royale with randomly generated convex polygon arenas that change each round. The shrinking ring contracts the polygon toward its centroid. All boundary checks switch from distance-from-center to point-in-polygon math.
 
-## Root Cause Analysis
+## Technical Approach
 
-In `client/client.js`, the `resizeCanvas()` function (line 7–11) sets:
-```js
-canvas.width = size;   // CSS pixels
-canvas.height = size;  // CSS pixels
-```
+### 1. Polygon Geometry Utilities (server/game.js)
 
-On a 2x Retina display, this means a 600×600 CSS-pixel canvas has only a 600×600 backing buffer, but the display renders it at 1200×1200 physical pixels — the browser upscales it, producing blur.
+Add pure functions for convex polygon operations. No external dependencies needed — the math is straightforward.
 
-Additionally, all rendering uses fixed small pixel values (bullet radius 3px, line widths 2px, font sizes) that compound the fuzzy appearance.
+**`generateConvexPolygon(numVertices, radius)`**
+- Generate N random angles, sort them, place vertices on the circle at `radius` with slight radial jitter (0.75–1.0 × radius) for variety.
+- Returns `[{x, y}, ...]` in CCW order.
+- Vertex count: random integer in [5, 10].
 
-## Solution
+**`getPolygonCentroid(vertices)`**
+- Standard centroid formula: average of all vertex coordinates (sufficient for convex polygons with roughly uniform vertex distribution).
 
-Apply the standard Canvas HiDPI fix — a well-known pattern with no external dependencies:
+**`scalePolygonTowardCentroid(vertices, centroid, t)`**
+- Returns new vertices where each vertex is lerped toward centroid by factor `t` (0 = original, 1 = collapsed to centroid).
+- `newVertex = centroid + (vertex - centroid) * (1 - t)`
 
-1. **Scale the canvas backing buffer** by `window.devicePixelRatio`
-2. **Set CSS dimensions** explicitly to maintain the same visual size
-3. **Scale the 2D context** by `devicePixelRatio` so all drawing coordinates remain unchanged
-4. **Reset context transform** at the start of each render frame (since `resizeCanvas` may be called on window resize)
+**`pointInConvexPolygon(px, py, vertices)`**
+- Cross-product winding test: for each edge, check that point is on the same side (left/CCW) of every edge. O(N) where N ≤ 10, so trivially fast.
 
-### Key Changes (all in `client/client.js`)
+**`clampPointToPolygon(px, py, vertices)`**
+- If point is inside, return as-is.
+- Otherwise, find the closest point on the polygon boundary: project onto each edge segment, return the nearest projection. O(N).
 
-**`resizeCanvas()` function** — multiply backing buffer by DPR, set CSS size, apply context scale:
-```js
-function resizeCanvas() {
-  const size = Math.min(window.innerWidth - 20, window.innerHeight - 80);
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = size * dpr;
-  canvas.height = size * dpr;
-  canvas.style.width = size + 'px';
-  canvas.style.height = size + 'px';
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-}
-```
+**`randomPointInConvexPolygon(vertices, centroid, radiusFraction)`**
+- For spawns: pick a point at ~80% distance from centroid toward a polygon vertex/edge. Use angular distribution around centroid scaled to the polygon boundary.
 
-**Add a `canvasSize` variable** — tracks the logical (CSS) size so rendering and input code use CSS coordinates instead of `canvas.width`/`canvas.height` (which are now DPR-scaled).
+### 2. Server Game Logic Changes (server/game.js)
 
-**`render()` function** — replace `canvas.width`/`canvas.height` with `canvasSize` for coordinate math. Use `canvas.width`/`canvas.height` only for the initial `clearRect` (which needs physical pixels, so save/restore transform around it).
+**New state fields on Game:**
+- `this.arenaVertices` — the full-size polygon for the current round (array of {x,y})
+- `this.arenaCentroid` — centroid of arenaVertices
+- `this.ringVertices` — the current shrunk polygon (recomputed each tick)
 
-**`sendInput()` function** — replace `canvas.width` with `canvasSize` for aim angle calculation.
+**`constructor()` changes:**
+- Initialize `arenaVertices` with a default polygon (for lobby display).
+- Compute and store `arenaCentroid`.
+- Set `ringVertices = [...arenaVertices]`.
 
-**Mouse coordinates** — already correct since `getBoundingClientRect()` returns CSS coordinates, and our context is scaled by DPR.
+**`startRound()` changes:**
+- Call `generateConvexPolygon(randomInt(5,10), ARENA_RADIUS)` to create new arena shape.
+- Compute centroid.
+- Store `arenaVertices` and `arenaCentroid`.
+- Set `ringVertices = arenaVertices` (ring starts at full size).
+- Spawn players inside polygon.
 
-### What Stays The Same
-- All drawing coordinates, font sizes, line widths, and radii remain exactly the same in code — the DPR scaling is handled at the context transform level
-- Server-side code (`server/game.js`, `server/index.js`) is untouched
-- All 44 existing tests continue to pass (they only test server-side logic)
+**`resetForNextRound()` changes:**
+- Generate a new polygon for the lobby.
+- Spawn players inside polygon.
+
+**`tickActive()` changes:**
+- Compute `shrinkProgress` as before (0→1 over 75s).
+- `ringVertices = scalePolygonTowardCentroid(arenaVertices, arenaCentroid, shrinkProgress * 0.95)`.
+
+**`movePlayer()` changes:**
+- Replace distance-from-center check with `pointInConvexPolygon`.
+- If outside, use `clampPointToPolygon` to push to nearest edge.
+
+**`updateBullets()` changes:**
+- Replace `dist > ARENA_RADIUS + 50` with `!pointInConvexPolygon(bullet.x, bullet.y, arenaVertices)`. Add small margin by checking against a slightly expanded version of arenaVertices.
+
+**`applyRingDamage()` changes:**
+- Replace `dist > this.ringRadius` with `!pointInConvexPolygon(player.x, player.y, this.ringVertices)`.
+
+**`spawnPlayer()` and `startRound()` spawn logic changes:**
+- Replace circular spawn with point inside current arena polygon at ~80% from centroid.
+
+**`getState()` changes:**
+- Add `arenaVertices` and `ringVertices` arrays to serialized state.
+- Keep `arenaRadius` for backward compatibility / camera framing.
+
+### 3. Client Rendering Changes (client/client.js)
+
+**Arena background:**
+- Replace `ctx.arc(cx, cy, arenaRadius * scale, ...)` with polygon path using `gameState.arenaVertices`.
+
+**Ring boundary:**
+- Replace ring arc with polygon path using `gameState.ringVertices`.
+
+**Danger zone:**
+- Draw arena polygon fill, then clip to ring polygon inverse for the red tint overlay.
+
+**State reception:**
+- Read `arenaVertices` and `ringVertices` from game state messages.
+
+### 4. Test Updates (test/game.test.js)
+
+Tests affected:
+- **"Game initializes in lobby state"** — check `arenaVertices` exists, is array with 5-10 vertices.
+- **"Players spawn around arena edge in lobby"** — verify spawn is inside polygon.
+- **"Movement is clamped to arena bounds"** — verify clamped to polygon edge.
+- **"Ring shrinks during active game"** — verify ringVertices are closer to centroid than arenaVertices.
+- **"Ring damage applies to players outside ring"** — place player outside ringVertices polygon.
+- **"Game state serialization works"** — check for `arenaVertices` and `ringVertices` fields.
+
+New tests to add:
+- Polygon generation produces valid convex polygon with correct vertex count.
+- Point-in-polygon correctly classifies inside/outside points.
+- Polygon scaling produces smaller polygon.
+- Bullets removed when exiting polygon.
+- Each new round generates a different polygon shape.
+
+### 5. Performance Considerations
+
+- Point-in-polygon with N ≤ 10 vertices is ~10 cross-product operations — negligible.
+- `clampPointToPolygon` iterates edges (≤ 10) — negligible.
+- Ring vertices recomputed each tick (20 Hz) with ≤ 10 lerps — negligible.
+- No performance concerns for this vertex count.
+
+## Execution Strategy
+
+**Single agent** — all changes are tightly coupled. The polygon math, game logic, client rendering, and tests all depend on consistent polygon data structures and interfaces. Splitting would create merge conflicts and integration complexity.
 
 ## Files Modified
-- `client/client.js` — resizeCanvas(), render(), sendInput(), add canvasSize variable
 
-## Risks
-- None significant. This is a standard, well-tested pattern. The only client-side file is modified; server logic is untouched.
+1. `server/game.js` — polygon generation, boundary logic, state serialization
+2. `client/client.js` — polygon rendering
+3. `test/game.test.js` — updated and new tests
 
-## References
-- [MDN: Window.devicePixelRatio](https://developer.mozilla.org/en-US/docs/Web/API/Window/devicePixelRatio) — standard web API
-- This is the canonical approach used by every major Canvas library (Pixi.js, Fabric.js, Konva, etc.)
+## Sources
+
+- Point-in-polygon (cross-product method for convex polygons): standard computational geometry, no external library needed
+- Convex polygon generation via sorted random angles: standard approach for generating random convex polygons inscribed in a circle
