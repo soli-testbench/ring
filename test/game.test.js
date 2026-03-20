@@ -363,7 +363,7 @@ test('Game state serialization includes polygon vertices', () => {
   assert(state.yourId === id, 'has yourId');
 });
 
-test('Each new round generates a different polygon shape', () => {
+test('Each new round generates a different polygon shape via resetForNextRound', () => {
   const game = new Game();
   const mockWs1 = { readyState: 1, send: () => {} };
   const mockWs2 = { readyState: 1, send: () => {} };
@@ -373,10 +373,9 @@ test('Each new round generates a different polygon shape', () => {
   game.startRound();
   const firstVertices = game.arenaVertices.map((v) => ({ x: v.x, y: v.y }));
 
-  // Reset and start again
+  // Reset generates a new polygon for the next round
   game.state = STATE_ROUND_END;
   game.resetForNextRound();
-  game.startRound();
   const secondVertices = game.arenaVertices;
 
   // Vertices should differ (extremely unlikely to be identical with random generation)
@@ -394,7 +393,44 @@ test('Each new round generates a different polygon shape', () => {
       }
     }
   }
-  assert(!same, 'second round has different polygon vertices');
+  assert(!same, 'resetForNextRound produces different polygon vertices');
+});
+
+test('Countdown map matches round map (startRound preserves polygon)', () => {
+  const game = new Game();
+  const mockWs1 = { readyState: 1, send: () => {} };
+  const mockWs2 = { readyState: 1, send: () => {} };
+  game.addPlayer(mockWs1);
+  game.addPlayer(mockWs2);
+
+  // Capture the polygon visible during lobby/countdown
+  const lobbyVertices = game.arenaVertices.map((v) => ({ x: v.x, y: v.y }));
+  const lobbyCentroid = { x: game.arenaCentroid.x, y: game.arenaCentroid.y };
+
+  // Start the round (simulates countdown ending)
+  game.startRound();
+
+  // arenaVertices and centroid should be identical to the lobby values
+  assert(
+    game.arenaVertices.length === lobbyVertices.length,
+    'vertex count unchanged after startRound'
+  );
+  let verticesMatch = true;
+  for (let i = 0; i < lobbyVertices.length; i++) {
+    if (
+      Math.abs(game.arenaVertices[i].x - lobbyVertices[i].x) > 0.001 ||
+      Math.abs(game.arenaVertices[i].y - lobbyVertices[i].y) > 0.001
+    ) {
+      verticesMatch = false;
+      break;
+    }
+  }
+  assert(verticesMatch, 'arena vertices identical before and after startRound');
+  assert(
+    Math.abs(game.arenaCentroid.x - lobbyCentroid.x) < 0.001 &&
+      Math.abs(game.arenaCentroid.y - lobbyCentroid.y) < 0.001,
+    'centroid identical before and after startRound'
+  );
 });
 
 test('Spawned players are inside polygon after startRound', () => {

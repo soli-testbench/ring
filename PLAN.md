@@ -1,71 +1,53 @@
-# Plan: Player Nicknames and Name Label Fix
+# Plan: Fix Countdown Map vs Playable Map Bug
 
-## Overview
+## Problem
 
-Two-part improvement: (1) fix name label rendering (too large, overlapping sprite), and (2) add nickname support via a `set_name` WebSocket message and client-side UI input.
+When 2+ players join the lobby, a 5-second countdown starts. During this countdown, players see **map A** (the polygon generated in `resetForNextRound()` or the constructor) and their characters are positioned on map A. However, when `startRound()` fires at the end of the countdown, it **regenerates the polygon** (lines 382-386 of `server/game.js`), creating **map B**. Players are then repositioned onto map B. This causes a jarring visual jump — the arena shape changes and players teleport.
 
-## Part 1: Fix Name Label Rendering
+## Root Cause
 
-### Current State (client/client.js, `drawStickFigure()`, lines 369–372)
-- **Font size**: `Math.max(10, r * 0.5)px monospace` where `r = 15 * scale` — scales with zoom, often too large relative to the stick figure
-- **Position**: `py + r * 1.1` — barely below the body, overlaps with stick figure legs (which end at `py + r * 0.8`)
+In `server/game.js`, the `startRound()` method (line 380) calls `generateConvexPolygon()` to create new `arenaVertices`, `arenaCentroid`, and `ringVertices`. This overwrites the polygon that was already being shown to players during the lobby/countdown phase. The polygon is already generated at two appropriate lifecycle points:
+1. In the `Game` constructor (for the very first round)
+2. In `resetForNextRound()` (for subsequent rounds)
 
-### Fix
-- **Reduce font size**: Change from `r * 0.5` to `r * 0.35`, lower minimum to `8` → `Math.max(8, r * 0.35)`
-- **Reposition below feet**: Change y-position from `py + r * 1.1` to `py + r * 1.3` — clears the leg endpoints at `py + r * 0.8` with comfortable margin
+The `startRound()` method should NOT regenerate the polygon — it should reuse what's already there.
 
-## Part 2: Nickname Support
+## Fix
 
-### Client-Side UI (client/index.html + client/client.js)
+### `server/game.js` — `startRound()` method (lines 380-408)
 
-**HTML** — Add a nickname input element:
-- A `<div id="nickname-container">` with an `<input type="text" id="nickname-input" maxlength="16" placeholder="Enter nickname...">` and a `<button id="nickname-set">Set</button>`
-- Positioned in the HUD area (e.g., below the status text, above the canvas)
-- Styled to match existing dark theme: `#1a1a2e` background, monospace font, `#4fc` accent color, similar to existing controls-dialog styling
+**Remove** lines 382-386 (the polygon regeneration):
+```js
+// DELETE THESE LINES:
+this.arenaVertices = generateConvexPolygon(
+  5 + Math.floor(Math.random() * 6),
+  ARENA_RADIUS
+);
+this.arenaCentroid = getPolygonCentroid(this.arenaVertices);
+```
 
-**JavaScript** — Event handling:
-- On submit (Enter key or button click): send `{ type: 'set_name', name: inputValue }` via WebSocket
-- **WASD prevention**: In the existing `keydown`/`keyup` handlers, check `if (document.activeElement === nicknameInput) return;` to prevent game input while typing
-- Similarly, prevent the 'H' key (controls dialog toggle) while input is focused
+**Keep** the ring vertex reset — the ring must be reset to the full arena size at round start (it may have shrunk in a previous round), but referencing the existing `arenaVertices`:
+```js
+this.ringVertices = this.arenaVertices.map((v) => ({ x: v.x, y: v.y }));
+```
 
-### Server-Side (server/index.js + server/game.js)
+Player respawning (lines 393-408) continues to work as-is since it uses `this.arenaVertices` and `this.arenaCentroid`, which now refer to the same polygon shown during countdown.
 
-**server/index.js** — WebSocket `message` handler (line 85–93):
-- Add handling for `msg.type === 'set_name'`: call `game.setPlayerName(playerId, msg.name)`
+### `test/game.test.js` — Update "Each new round generates a different polygon shape" test
 
-**server/game.js** — New method `setPlayerName(playerId, name)` on Game class:
-1. Look up player by ID; return if not found
-2. Validate `typeof name === 'string'`; if not, fall back to default
-3. Trim whitespace: `name.trim()`
-4. Enforce max 16 characters: `name.slice(0, 16)`
-5. If result is empty after trim, fall back to `'Player N'`
-6. Set `player.name = validatedName`
+This test currently calls `startRound()` twice expecting different polygons. Since `startRound()` will no longer regenerate the polygon, update the test to verify that `resetForNextRound()` (which runs between rounds) generates a new polygon.
 
-No further broadcast changes needed — the `name` field is already included in `getState()` and sent to all clients every tick.
+### Add new test: "Countdown map matches round map"
 
-### Win Announcement
-Already handled: client.js line 171 uses `winner.name` for display. Once the server-side name is updated, it propagates automatically.
+Add a test that verifies `arenaVertices` before and after `startRound()` are identical — confirming the bug is fixed.
 
-## Files Modified
+## Scope
 
-1. **client/index.html** — Add nickname input `<div>` + styling
-2. **client/client.js** — Fix name label font/position; prevent WASD when nickname input focused; send `set_name` message
-3. **server/index.js** — Handle `set_name` WebSocket message
-4. **server/game.js** — Add `setPlayerName()` method with validation
-5. **test/game.test.js** — Add tests for `setPlayerName()` validation
+**Mode: single** — This is a well-contained bug fix in `server/game.js` with a corresponding test update in `test/game.test.js`. No client changes needed since the client renders whatever `arenaVertices` the server sends.
 
-## Testing Strategy
+## Verification
 
-Add unit tests for `setPlayerName()`:
-- Valid nickname is accepted and stored
-- Whitespace is trimmed
-- Names longer than 16 chars are truncated
-- Empty/whitespace-only names fall back to `'Player N'`
-- Non-string input falls back to `'Player N'`
-- Name appears in serialized game state
-
-Run full existing test suite to verify no regressions.
-
-## Scope Assessment
-
-**Mode: single** — All changes are tightly coupled (client UI → WebSocket message → server validation → state broadcast → client render). No benefit from parallel execution.
+- `npm test` passes with all existing + new tests
+- The "Each new round generates a different polygon shape" test is updated to test the correct lifecycle point
+- A new test confirms `startRound()` preserves the lobby polygon
+- Visual: During countdown, the map shape and player positions remain identical when the round begins

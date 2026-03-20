@@ -379,11 +379,6 @@ class Game {
 
   startRound() {
     this.state = STATE_ACTIVE;
-    this.arenaVertices = generateConvexPolygon(
-      5 + Math.floor(Math.random() * 6),
-      ARENA_RADIUS
-    );
-    this.arenaCentroid = getPolygonCentroid(this.arenaVertices);
     this.ringVertices = this.arenaVertices.map((v) => ({ x: v.x, y: v.y }));
     this.ringStartTime = Date.now();
     this.bullets = [];
