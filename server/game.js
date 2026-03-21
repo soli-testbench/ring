@@ -1,5 +1,7 @@
 'use strict';
 
+const { createNPC, pickNPCName, updateNPCAI, MAX_NPC_COUNT, MIN_REAL_PLAYERS_FOR_NO_BOTS } = require('./npc');
+
 // --- Constants ---
 const ARENA_RADIUS = 500;
 const PLAYER_RADIUS = 15;
@@ -210,6 +212,7 @@ class Game {
     this.players = new Map(); // id -> Player
     this.bullets = []; // array of Bullet
     this.spectators = new Set(); // player ids in spectator mode
+    this.npcIds = new Set(); // player ids that are NPCs
     this.state = STATE_LOBBY;
     this.arenaVertices = generateConvexPolygon(
       5 + Math.floor(Math.random() * 6),
@@ -264,12 +267,19 @@ class Game {
     }
 
     this.players.set(id, player);
+
+    // Remove excess NPCs when a real player joins the lobby
+    if (this.state === STATE_LOBBY) {
+      this.trimNPCs();
+    }
+
     return id;
   }
 
   removePlayer(id) {
     this.players.delete(id);
     this.spectators.delete(id);
+    this.npcIds.delete(id);
 
     // Check win condition if game is active
     if (this.state === STATE_ACTIVE) {
@@ -280,6 +290,99 @@ class Game {
     if (this.state === STATE_LOBBY) {
       this.checkLobbyStart();
     }
+  }
+
+  addNPC() {
+    const id = this.nextPlayerId++;
+    const existingNames = new Set();
+    for (const p of this.players.values()) {
+      existingNames.add(p.name);
+    }
+    const name = pickNPCName(existingNames);
+    const npc = createNPC(id, name);
+    this.spawnPlayer(npc);
+    this.players.set(id, npc);
+    this.npcIds.add(id);
+    return id;
+  }
+
+  removeNPC(id) {
+    this.players.delete(id);
+    this.npcIds.delete(id);
+  }
+
+  removeAllNPCs() {
+    for (const id of this.npcIds) {
+      this.players.delete(id);
+    }
+    this.npcIds.clear();
+  }
+
+  getRealPlayerCount() {
+    let count = 0;
+    for (const p of this.players.values()) {
+      if (!this.npcIds.has(p.id) && !this.spectators.has(p.id)) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  fillWithNPCs() {
+    const realCount = this.getRealPlayerCount();
+    if (realCount >= MIN_REAL_PLAYERS_FOR_NO_BOTS) {
+      // Enough real players — remove all NPCs
+      this.removeAllNPCs();
+      return;
+    }
+
+    // Target total = max(MIN_PLAYERS_TO_START, realCount + enough bots to fill)
+    const targetTotal = Math.min(realCount + MAX_NPC_COUNT, MIN_REAL_PLAYERS_FOR_NO_BOTS);
+    const currentNPCCount = this.npcIds.size;
+    const desiredNPCCount = Math.max(0, targetTotal - realCount);
+
+    if (currentNPCCount < desiredNPCCount) {
+      // Add more NPCs
+      for (let i = currentNPCCount; i < desiredNPCCount; i++) {
+        this.addNPC();
+      }
+    } else if (currentNPCCount > desiredNPCCount) {
+      // Remove excess NPCs
+      const ids = [...this.npcIds];
+      for (let i = 0; i < currentNPCCount - desiredNPCCount; i++) {
+        this.removeNPC(ids[i]);
+      }
+    }
+  }
+
+  trimNPCs() {
+    const realCount = this.getRealPlayerCount();
+    if (realCount >= MIN_REAL_PLAYERS_FOR_NO_BOTS) {
+      this.removeAllNPCs();
+      return;
+    }
+    const targetTotal = Math.min(realCount + MAX_NPC_COUNT, MIN_REAL_PLAYERS_FOR_NO_BOTS);
+    const desiredNPCCount = Math.max(0, targetTotal - realCount);
+    const currentNPCCount = this.npcIds.size;
+    if (currentNPCCount > desiredNPCCount) {
+      const ids = [...this.npcIds];
+      for (let i = 0; i < currentNPCCount - desiredNPCCount; i++) {
+        this.removeNPC(ids[i]);
+      }
+    }
+  }
+
+  tickNPCs(dt, now) {
+    for (const id of this.npcIds) {
+      const npc = this.players.get(id);
+      if (npc && npc.alive) {
+        updateNPCAI(npc, this, dt, now);
+      }
+    }
+  }
+
+  _pointInRing(x, y) {
+    return pointInConvexPolygon(x, y, this.ringVertices);
   }
 
   spawnPlayer(player) {
@@ -364,6 +467,11 @@ class Game {
   }
 
   tickLobby(now) {
+    // Fill with NPCs if there are real players but not enough for a match
+    if (this.getRealPlayerCount() > 0) {
+      this.fillWithNPCs();
+    }
+
     const aliveCount = this.getAlivePlayers().length;
 
     if (aliveCount >= MIN_PLAYERS_TO_START) {
@@ -412,6 +520,9 @@ class Game {
       this.arenaCentroid,
       shrinkProgress * 0.95
     );
+
+    // Run NPC AI (sets their input/angle/shoot before movement)
+    this.tickNPCs(dt, now);
 
     // Move players
     for (const player of this.players.values()) {
@@ -527,6 +638,10 @@ class Game {
 
   resetForNextRound() {
     this.state = STATE_LOBBY;
+
+    // Remove all NPCs — they'll be re-added in lobby if needed
+    this.removeAllNPCs();
+
     this.arenaVertices = generateConvexPolygon(
       5 + Math.floor(Math.random() * 6),
       ARENA_RADIUS
@@ -588,6 +703,7 @@ class Game {
         alive: p.alive,
         name: p.name,
         isSpectator: this.spectators.has(p.id),
+        isNPC: this.npcIds.has(p.id),
       });
     }
 
@@ -642,6 +758,8 @@ module.exports = {
   STATE_LOBBY,
   STATE_ACTIVE,
   STATE_ROUND_END,
+  MAX_NPC_COUNT,
+  MIN_REAL_PLAYERS_FOR_NO_BOTS,
   generateConvexPolygon,
   getPolygonCentroid,
   scalePolygonTowardCentroid,

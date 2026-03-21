@@ -306,8 +306,9 @@ function drawStickFigure(player, scale, cx, cy) {
   }
 
   // Body color
-  const color = isMe ? '#4fc' : '#fff';
-  const headColor = isMe ? '#4fc' : '#fff';
+  const isBot = player.isNPC;
+  const color = isMe ? '#4fc' : isBot ? '#f80' : '#fff';
+  const headColor = isMe ? '#4fc' : isBot ? '#f80' : '#fff';
 
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
@@ -372,9 +373,11 @@ function drawStickFigure(player, scale, cx, cy) {
   // Name label
   const fontSize = Math.max(7, r * 0.25);
   ctx.font = `${fontSize}px monospace`;
-  ctx.fillStyle = isMe ? '#4fc' : '#aaa';
+  const isBot = player.isNPC;
+  ctx.fillStyle = isMe ? '#4fc' : isBot ? '#f80' : '#aaa';
   ctx.textAlign = 'center';
-  ctx.fillText(player.name, px, py + r * 0.8 + fontSize + 2);
+  const displayName = isBot ? `[BOT] ${player.name}` : player.name;
+  ctx.fillText(displayName, px, py + r * 0.8 + fontSize + 2);
 
   ctx.restore();
 }
