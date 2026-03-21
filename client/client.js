@@ -373,7 +373,6 @@ function drawStickFigure(player, scale, cx, cy) {
   // Name label
   const fontSize = Math.max(7, r * 0.25);
   ctx.font = `${fontSize}px monospace`;
-  const isBot = player.isNPC;
   ctx.fillStyle = isMe ? '#4fc' : isBot ? '#f80' : '#aaa';
   ctx.textAlign = 'center';
   const displayName = isBot ? `[BOT] ${player.name}` : player.name;
