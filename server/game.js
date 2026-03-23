@@ -1,6 +1,7 @@
 'use strict';
 
 const { createNPC, pickNPCName, updateNPCAI, MAX_NPC_COUNT, MIN_REAL_PLAYERS_FOR_NO_BOTS } = require('./npc');
+const { Leaderboard } = require('./leaderboard');
 
 // --- Constants ---
 const ARENA_RADIUS = 500;
@@ -229,6 +230,8 @@ class Game {
     this.lastTick = Date.now();
     this.tickInterval = null;
     this.onBroadcast = null; // callback for broadcasting state
+    this.leaderboard = new Leaderboard();
+    this.registeredNicknames = new Map(); // nickname (lowercase) -> playerId
   }
 
   start() {
@@ -277,6 +280,13 @@ class Game {
   }
 
   removePlayer(id) {
+    // Unregister nickname
+    for (const [nick, pid] of this.registeredNicknames) {
+      if (pid === id) {
+        this.registeredNicknames.delete(nick);
+        break;
+      }
+    }
     this.players.delete(id);
     this.spectators.delete(id);
     this.npcIds.delete(id);
@@ -400,13 +410,36 @@ class Game {
 
   setPlayerName(playerId, name) {
     const player = this.players.get(playerId);
-    if (!player) return;
+    if (!player) return { ok: false, error: 'Player not found' };
     if (typeof name !== 'string') {
       player.name = `Player ${playerId}`;
-      return;
+      return { ok: true };
     }
     const trimmed = name.trim().slice(0, 16);
-    player.name = trimmed || `Player ${playerId}`;
+    if (!trimmed) {
+      player.name = `Player ${playerId}`;
+      return { ok: true };
+    }
+
+    // Check nickname uniqueness among connected players
+    const lowerName = trimmed.toLowerCase();
+    const existingOwner = this.registeredNicknames.get(lowerName);
+    if (existingOwner !== undefined && existingOwner !== playerId) {
+      return { ok: false, error: 'Nickname already taken' };
+    }
+
+    // Unregister old nickname if player had one
+    for (const [nick, pid] of this.registeredNicknames) {
+      if (pid === playerId) {
+        this.registeredNicknames.delete(nick);
+        break;
+      }
+    }
+
+    // Register new nickname
+    this.registeredNicknames.set(lowerName, playerId);
+    player.name = trimmed;
+    return { ok: true };
   }
 
   handleInput(playerId, input) {
@@ -627,7 +660,19 @@ class Game {
       this.roundEndTime = Date.now();
       this.winnerId = alive.length === 1 ? alive[0].id : null;
       this.bullets = [];
+
+      // Record win in leaderboard
+      if (this.winnerId !== null) {
+        const winner = this.players.get(this.winnerId);
+        if (winner && !this.npcIds.has(this.winnerId)) {
+          this.leaderboard.recordWin(winner.name);
+        }
+      }
     }
+  }
+
+  getLeaderboard() {
+    return this.leaderboard.getRanked();
   }
 
   tickRoundEnd(now) {

@@ -24,6 +24,16 @@ const infoText = document.getElementById('info-text');
 const hpBar = document.getElementById('hp-bar');
 const nicknameInput = document.getElementById('nickname-input');
 const nicknameSetBtn = document.getElementById('nickname-set');
+const nicknameError = document.getElementById('nickname-error');
+
+// --- Tab elements ---
+const tabGame = document.getElementById('tab-game');
+const tabLeaderboard = document.getElementById('tab-leaderboard');
+const gameView = document.getElementById('game-view');
+const leaderboardView = document.getElementById('leaderboard-view');
+const leaderboardBody = document.getElementById('leaderboard-body');
+const leaderboardEmpty = document.getElementById('leaderboard-empty');
+let activeTab = 'game';
 
 // --- Game state ---
 let ws = null;
@@ -93,6 +103,13 @@ function connect() {
     } else if (msg.type === 'state') {
       gameState = msg;
       updateHUD();
+    } else if (msg.type === 'name_error') {
+      nicknameError.textContent = msg.error;
+      nicknameError.style.display = 'block';
+    } else if (msg.type === 'name_ok') {
+      nicknameError.style.display = 'none';
+    } else if (msg.type === 'leaderboard') {
+      renderLeaderboard(msg.data);
     }
   };
 
@@ -418,6 +435,7 @@ window.addEventListener('keydown', (e) => {
 function submitNickname() {
   const name = nicknameInput.value.trim();
   if (!name || !ws || ws.readyState !== WebSocket.OPEN) return;
+  nicknameError.style.display = 'none';
   ws.send(JSON.stringify({ type: 'set_name', name }));
   nicknameInput.blur();
 }
@@ -426,5 +444,60 @@ nicknameSetBtn.addEventListener('click', submitNickname);
 nicknameInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') submitNickname();
 });
+
+// --- Tab navigation ---
+function switchTab(tab) {
+  activeTab = tab;
+  if (tab === 'game') {
+    gameView.style.display = 'flex';
+    leaderboardView.style.display = 'none';
+    tabGame.classList.add('active');
+    tabLeaderboard.classList.remove('active');
+  } else {
+    gameView.style.display = 'none';
+    leaderboardView.style.display = 'block';
+    tabGame.classList.remove('active');
+    tabLeaderboard.classList.add('active');
+    fetchLeaderboard();
+  }
+}
+
+tabGame.addEventListener('click', () => switchTab('game'));
+tabLeaderboard.addEventListener('click', () => switchTab('leaderboard'));
+
+// --- Leaderboard ---
+function fetchLeaderboard() {
+  fetch('/api/leaderboard')
+    .then((res) => res.json())
+    .then((data) => renderLeaderboard(data))
+    .catch(() => {
+      leaderboardBody.innerHTML = '';
+      leaderboardEmpty.style.display = 'block';
+    });
+}
+
+function renderLeaderboard(data) {
+  leaderboardBody.innerHTML = '';
+  if (!data || data.length === 0) {
+    leaderboardEmpty.style.display = 'block';
+    return;
+  }
+  leaderboardEmpty.style.display = 'none';
+  for (const entry of data) {
+    const tr = document.createElement('tr');
+    const rankTd = document.createElement('td');
+    rankTd.className = 'rank-col';
+    rankTd.textContent = entry.rank;
+    const nameTd = document.createElement('td');
+    nameTd.textContent = entry.nickname;
+    const winsTd = document.createElement('td');
+    winsTd.className = 'wins-col';
+    winsTd.textContent = entry.wins;
+    tr.appendChild(rankTd);
+    tr.appendChild(nameTd);
+    tr.appendChild(winsTd);
+    leaderboardBody.appendChild(tr);
+  }
+}
 
 requestAnimationFrame(render);
