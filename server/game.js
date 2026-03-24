@@ -665,6 +665,25 @@ class Game {
     });
   }
 
+  checkPickupCollection() {
+    if (!this.machineGunPickup || this.machineGunPickup.collected) return;
+
+    for (const player of this.players.values()) {
+      if (!player.alive || this.spectators.has(player.id)) continue;
+
+      const dx = player.x - this.machineGunPickup.x;
+      const dy = player.y - this.machineGunPickup.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < PICKUP_COLLECT_RADIUS) {
+        this.machineGunPickup.collected = true;
+        this.machineGunPickup.collectedBy = player.id;
+        player.shootCooldownMs = MACHINE_GUN_COOLDOWN_MS;
+        return;
+      }
+    }
+  }
+
   applyRingDamage(dt) {
     for (const player of this.players.values()) {
       if (!player.alive || this.spectators.has(player.id)) continue;

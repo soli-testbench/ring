@@ -291,6 +291,48 @@ function render() {
     ctx.stroke();
   }
 
+  // Draw machine gun pickup
+  if (gameState.machineGunPickup && !gameState.machineGunPickup.collected) {
+    const pickup = gameState.machineGunPickup;
+    const pkX = cx + pickup.x * scale;
+    const pkY = cy + pickup.y * scale;
+    const pkR = 12 * scale;
+
+    // Outer glow
+    ctx.beginPath();
+    ctx.arc(pkX, pkY, pkR * 1.4, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 165, 0, 0.15)';
+    ctx.fill();
+
+    // Background circle
+    ctx.beginPath();
+    ctx.arc(pkX, pkY, pkR, 0, Math.PI * 2);
+    ctx.fillStyle = '#2a1a00';
+    ctx.strokeStyle = '#f80';
+    ctx.lineWidth = 2;
+    ctx.fill();
+    ctx.stroke();
+
+    // Machine gun icon: three horizontal barrel lines
+    ctx.strokeStyle = '#f80';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    const barrelLen = pkR * 0.7;
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      ctx.moveTo(pkX - barrelLen * 0.3, pkY + i * pkR * 0.25);
+      ctx.lineTo(pkX + barrelLen, pkY + i * pkR * 0.25);
+      ctx.stroke();
+    }
+
+    // Label
+    const labelSize = Math.max(7, pkR * 0.4);
+    ctx.font = `bold ${labelSize}px monospace`;
+    ctx.fillStyle = '#f80';
+    ctx.textAlign = 'center';
+    ctx.fillText('MG', pkX, pkY + pkR + labelSize + 2);
+  }
+
   // Draw bullets
   for (const bullet of gameState.bullets) {
     const bx = cx + bullet.x * scale;
