@@ -580,9 +580,6 @@ class Game {
       shrinkProgress * 0.95
     );
 
-    // Check machine gun pickup collection
-    this.checkPickupCollection();
-
     // Run NPC AI (sets their input/angle/shoot before movement)
     this.tickNPCs(dt, now);
 
@@ -595,7 +592,7 @@ class Game {
     // Move bullets
     this.updateBullets(dt, now);
 
-    // Check pickup collection
+    // Check machine gun pickup collection
     this.checkPickupCollection();
 
     // Ring damage
@@ -703,25 +700,6 @@ class Game {
     }
   }
 
-  checkPickupCollection() {
-    if (!this.machineGunPickup || this.machineGunPickup.collected) return;
-
-    for (const player of this.players.values()) {
-      if (!player.alive || this.spectators.has(player.id)) continue;
-
-      const dx = player.x - this.machineGunPickup.x;
-      const dy = player.y - this.machineGunPickup.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist < PICKUP_COLLECT_RADIUS) {
-        this.machineGunPickup.collected = true;
-        this.machineGunPickup.collectedBy = player.id;
-        player.hasMachineGun = true;
-        break;
-      }
-    }
-  }
-
   checkWinCondition() {
     const alive = this.getAlivePlayers();
 
@@ -737,25 +715,6 @@ class Game {
         if (winner && !this.npcIds.has(this.winnerId)) {
           this.leaderboard.recordWin(winner.name);
         }
-      }
-    }
-  }
-
-  checkPickupCollection() {
-    if (!this.machineGunPickup || this.machineGunPickup.collected) return;
-
-    for (const player of this.players.values()) {
-      if (!player.alive || this.spectators.has(player.id)) continue;
-
-      const dx = player.x - this.machineGunPickup.x;
-      const dy = player.y - this.machineGunPickup.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist < PICKUP_COLLECT_RADIUS) {
-        this.machineGunPickup.collected = true;
-        this.machineGunPickup.collectedBy = player.id;
-        player.shootCooldownMs = MACHINE_GUN_COOLDOWN_MS;
-        break;
       }
     }
   }
@@ -862,19 +821,16 @@ class Game {
         ownerId: b.ownerId,
       })),
       machineGunPickup: this.machineGunPickup
-        ? { x: this.machineGunPickup.x, y: this.machineGunPickup.y, collected: this.machineGunPickup.collected }
-        : null,
-      winnerId: this.winnerId,
-      yourId: forPlayerId,
-      isSpectator: this.spectators.has(forPlayerId),
-      lobbyCountdown,
-      machineGunPickup: this.machineGunPickup
         ? {
             x: this.machineGunPickup.x,
             y: this.machineGunPickup.y,
             collected: this.machineGunPickup.collected,
           }
         : null,
+      winnerId: this.winnerId,
+      yourId: forPlayerId,
+      isSpectator: this.spectators.has(forPlayerId),
+      lobbyCountdown,
     };
   }
 
@@ -906,8 +862,6 @@ module.exports = {
   STATE_LOBBY,
   STATE_ACTIVE,
   STATE_ROUND_END,
-  MACHINE_GUN_COOLDOWN_MS,
-  PICKUP_COLLECT_RADIUS,
   MAX_NPC_COUNT,
   MIN_REAL_PLAYERS_FOR_NO_BOTS,
   generateConvexPolygon,
