@@ -301,6 +301,11 @@ function render() {
     ctx.fill();
   }
 
+  // Draw machine gun pickup
+  if (gameState.machineGunPickup && !gameState.machineGunPickup.collected) {
+    drawMachineGunPickup(gameState.machineGunPickup, scale, cx, cy);
+  }
+
   // Draw players (stick figures)
   for (const player of gameState.players) {
     if (player.isSpectator) continue;
@@ -308,6 +313,60 @@ function render() {
   }
 
   requestAnimationFrame(render);
+}
+
+function drawMachineGunPickup(pickup, scale, cx, cy) {
+  const px = cx + pickup.x * scale;
+  const py = cy + pickup.y * scale;
+  const size = 12 * scale;
+
+  ctx.save();
+
+  // Pulsing glow effect
+  const pulse = 0.7 + 0.3 * Math.sin(Date.now() / 200);
+  ctx.shadowColor = '#f80';
+  ctx.shadowBlur = 10 * pulse;
+
+  // Outer diamond shape
+  ctx.beginPath();
+  ctx.moveTo(px, py - size);
+  ctx.lineTo(px + size, py);
+  ctx.lineTo(px, py + size);
+  ctx.lineTo(px - size, py);
+  ctx.closePath();
+  ctx.fillStyle = `rgba(255, 136, 0, ${0.3 * pulse})`;
+  ctx.fill();
+  ctx.strokeStyle = '#f80';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Inner bullet icon (small rectangle representing a gun barrel)
+  const barrelW = size * 0.8;
+  const barrelH = size * 0.25;
+  ctx.fillStyle = '#ff0';
+  ctx.fillRect(px - barrelW / 2, py - barrelH / 2, barrelW, barrelH);
+
+  // Small muzzle flash lines
+  ctx.strokeStyle = '#ff0';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(px + barrelW / 2, py);
+  ctx.lineTo(px + barrelW / 2 + size * 0.3, py - size * 0.2);
+  ctx.moveTo(px + barrelW / 2, py);
+  ctx.lineTo(px + barrelW / 2 + size * 0.35, py);
+  ctx.moveTo(px + barrelW / 2, py);
+  ctx.lineTo(px + barrelW / 2 + size * 0.3, py + size * 0.2);
+  ctx.stroke();
+
+  // Label
+  ctx.shadowBlur = 0;
+  const fontSize = Math.max(7, size * 0.4);
+  ctx.font = `bold ${fontSize}px monospace`;
+  ctx.fillStyle = '#f80';
+  ctx.textAlign = 'center';
+  ctx.fillText('MG', px, py + size + fontSize + 2);
+
+  ctx.restore();
 }
 
 function drawStickFigure(player, scale, cx, cy) {
