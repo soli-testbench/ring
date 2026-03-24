@@ -10,6 +10,9 @@ const {
   STATE_ROUND_END,
   MIN_PLAYERS_TO_START,
   RING_SHRINK_DURATION_MS,
+  SHOOT_COOLDOWN_MS,
+  MACHINE_GUN_COOLDOWN_MS,
+  PICKUP_COLLECT_RADIUS,
   MAX_NPC_COUNT,
   MIN_REAL_PLAYERS_FOR_NO_BOTS,
   generateConvexPolygon,
@@ -1354,6 +1357,222 @@ test('Leaderboard hasNickname is case-insensitive', () => {
   assert(lb.hasNickname('champion'), 'lowercase match');
   assert(lb.hasNickname('CHAMPION'), 'uppercase match');
   assert(!lb.hasNickname('Champ'), 'partial no match');
+});
+
+// --- Machine Gun Pickup Tests ---
+
+test('Machine gun pickup spawns when round starts', () => {
+  const game = new Game();
+  const mockWs1 = { readyState: 1, send: () => {} };
+  const mockWs2 = { readyState: 1, send: () => {} };
+  game.addPlayer(mockWs1);
+  game.addPlayer(mockWs2);
+
+  assert(game.machineGunPickup === null, 'no pickup before round starts');
+  game.startRound();
+  assert(game.machineGunPickup !== null, 'pickup spawned after startRound');
+  assert(typeof game.machineGunPickup.x === 'number', 'pickup has x coordinate');
+  assert(typeof game.machineGunPickup.y === 'number', 'pickup has y coordinate');
+  assert(game.machineGunPickup.collected === false, 'pickup not collected initially');
+  assert(game.machineGunPickup.collectedBy === null, 'pickup collectedBy is null initially');
+  assert(
+    pointInConvexPolygon(game.machineGunPickup.x, game.machineGunPickup.y, game.arenaVertices),
+    'pickup spawns inside arena polygon'
+  );
+});
+
+test('Pickup collection sets hasMachineGun and marks pickup collected', () => {
+  const game = new Game();
+  const mockWs1 = { readyState: 1, send: () => {} };
+  const mockWs2 = { readyState: 1, send: () => {} };
+  const id1 = game.addPlayer(mockWs1);
+  game.addPlayer(mockWs2);
+
+  game.startRound();
+  const player = game.players.get(id1);
+
+  // Move player directly on top of pickup
+  player.x = game.machineGunPickup.x;
+  player.y = game.machineGunPickup.y;
+
+  assert(player.hasMachineGun === false, 'player does not have machine gun before collection');
+  game.checkPickupCollection();
+  assert(player.hasMachineGun === true, 'player has machine gun after collection');
+  assert(game.machineGunPickup.collected === true, 'pickup marked as collected');
+  assert(game.machineGunPickup.collectedBy === id1, 'pickup collectedBy is correct player');
+});
+
+test('Collecting pickup changes effective fire rate from 300ms to 150ms', () => {
+  const game = new Game();
+  const mockWs1 = { readyState: 1, send: () => {} };
+  const mockWs2 = { readyState: 1, send: () => {} };
+  const id1 = game.addPlayer(mockWs1);
+  game.addPlayer(mockWs2);
+
+  game.startRound();
+  const player = game.players.get(id1);
+  player.angle = 0;
+
+  // Shoot once to set lastShot
+  game.tryShoot(player);
+  assert(game.bullets.length === 1, 'first shot fires');
+  const firstShotTime = player.lastShot;
+
+  // Try to shoot again immediately — should be blocked by normal cooldown
+  player.lastShot = firstShotTime; // ensure lastShot is set
+  game.tryShoot(player);
+  assert(game.bullets.length === 1, 'second shot blocked by normal cooldown');
+
+  // Advance time past machine gun cooldown (150ms) but before normal cooldown (300ms)
+  player.lastShot = Date.now() - (MACHINE_GUN_COOLDOWN_MS + 1);
+  game.tryShoot(player);
+  assert(game.bullets.length === 1, 'shot still blocked without machine gun (within normal cooldown)');
+
+  // Now give machine gun
+  player.hasMachineGun = true;
+  player.lastShot = Date.now() - (MACHINE_GUN_COOLDOWN_MS + 1);
+  game.tryShoot(player);
+  assert(game.bullets.length === 2, 'shot succeeds with machine gun at reduced cooldown');
+
+  // Verify the cooldown values are correct
+  assert(SHOOT_COOLDOWN_MS === 300, 'normal shoot cooldown is 300ms');
+  assert(MACHINE_GUN_COOLDOWN_MS === 150, 'machine gun cooldown is 150ms (50% reduction)');
+});
+
+test('Only one pickup spawns per match', () => {
+  const game = new Game();
+  const mockWs1 = { readyState: 1, send: () => {} };
+  const mockWs2 = { readyState: 1, send: () => {} };
+  game.addPlayer(mockWs1);
+  game.addPlayer(mockWs2);
+
+  game.startRound();
+  const pickupPos = { x: game.machineGunPickup.x, y: game.machineGunPickup.y };
+
+  // Simulate multiple ticks — pickup position should not change
+  game.tickActive(0.05, Date.now());
+  game.tickActive(0.05, Date.now());
+  assert(
+    game.machineGunPickup.x === pickupPos.x && game.machineGunPickup.y === pickupPos.y,
+    'pickup position unchanged after ticks'
+  );
+});
+
+test('Pickup disappears after collection (not re-rendered)', () => {
+  const game = new Game();
+  const mockWs1 = { readyState: 1, send: () => {} };
+  const mockWs2 = { readyState: 1, send: () => {} };
+  const id1 = game.addPlayer(mockWs1);
+  game.addPlayer(mockWs2);
+
+  game.startRound();
+  const player = game.players.get(id1);
+  player.x = game.machineGunPickup.x;
+  player.y = game.machineGunPickup.y;
+
+  game.checkPickupCollection();
+  const state = game.getState(id1);
+  assert(state.machineGunPickup !== null, 'pickup data still in state');
+  assert(state.machineGunPickup.collected === true, 'pickup marked collected in broadcast state');
+});
+
+test('NPC can collect pickup and gain machine gun', () => {
+  const game = new Game();
+  const mockWs1 = { readyState: 1, send: () => {} };
+  const id1 = game.addPlayer(mockWs1);
+
+  // Add NPC
+  const npcId = game.addNPC();
+  const npc = game.players.get(npcId);
+
+  game.startRound();
+
+  // Move NPC on top of pickup
+  npc.x = game.machineGunPickup.x;
+  npc.y = game.machineGunPickup.y;
+
+  assert(npc.hasMachineGun === false, 'NPC does not have machine gun before collection');
+  game.checkPickupCollection();
+  assert(npc.hasMachineGun === true, 'NPC has machine gun after collection');
+  assert(game.machineGunPickup.collected === true, 'pickup collected by NPC');
+  assert(game.machineGunPickup.collectedBy === npcId, 'collectedBy is NPC id');
+});
+
+test('Fire rate bonus resets at start of next round', () => {
+  const game = new Game();
+  const mockWs1 = { readyState: 1, send: () => {} };
+  const mockWs2 = { readyState: 1, send: () => {} };
+  const id1 = game.addPlayer(mockWs1);
+  game.addPlayer(mockWs2);
+
+  game.startRound();
+  const player = game.players.get(id1);
+
+  // Give player machine gun
+  player.hasMachineGun = true;
+  assert(player.hasMachineGun === true, 'player has machine gun during round');
+
+  // Reset for next round
+  game.resetForNextRound();
+  const playerAfterReset = game.players.get(id1);
+  assert(playerAfterReset.hasMachineGun === false, 'machine gun bonus reset after round');
+  assert(game.machineGunPickup === null, 'pickup cleared after round reset');
+});
+
+test('Game state broadcast includes pickup data', () => {
+  const game = new Game();
+  const mockWs1 = { readyState: 1, send: () => {} };
+  const mockWs2 = { readyState: 1, send: () => {} };
+  const id1 = game.addPlayer(mockWs1);
+  game.addPlayer(mockWs2);
+
+  // Before round: no pickup in state
+  const lobbyState = game.getState(id1);
+  assert(lobbyState.machineGunPickup === null, 'no pickup in lobby state');
+
+  game.startRound();
+  const activeState = game.getState(id1);
+  assert(activeState.machineGunPickup !== null, 'pickup in active state');
+  assert(typeof activeState.machineGunPickup.x === 'number', 'pickup state has x');
+  assert(typeof activeState.machineGunPickup.y === 'number', 'pickup state has y');
+  assert(activeState.machineGunPickup.collected === false, 'pickup state shows not collected');
+});
+
+test('Collected pickup cannot be collected again', () => {
+  const game = new Game();
+  const mockWs1 = { readyState: 1, send: () => {} };
+  const mockWs2 = { readyState: 1, send: () => {} };
+  const id1 = game.addPlayer(mockWs1);
+  const id2 = game.addPlayer(mockWs2);
+
+  game.startRound();
+  const p1 = game.players.get(id1);
+  const p2 = game.players.get(id2);
+
+  // Player 1 collects
+  p1.x = game.machineGunPickup.x;
+  p1.y = game.machineGunPickup.y;
+  game.checkPickupCollection();
+  assert(p1.hasMachineGun === true, 'player 1 collected pickup');
+
+  // Player 2 walks over same spot
+  p2.x = game.machineGunPickup.x;
+  p2.y = game.machineGunPickup.y;
+  game.checkPickupCollection();
+  assert(p2.hasMachineGun === false, 'player 2 cannot collect already-collected pickup');
+  assert(game.machineGunPickup.collectedBy === id1, 'collectedBy still player 1');
+});
+
+test('Player starts new round without hasMachineGun after startRound', () => {
+  const game = new Game();
+  const mockWs1 = { readyState: 1, send: () => {} };
+  const mockWs2 = { readyState: 1, send: () => {} };
+  const id1 = game.addPlayer(mockWs1);
+  game.addPlayer(mockWs2);
+
+  game.startRound();
+  const player = game.players.get(id1);
+  assert(player.hasMachineGun === false, 'hasMachineGun is false at round start');
 });
 
 // --- Summary ---
