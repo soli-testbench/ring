@@ -1,0 +1,8 @@
+node_modules
+.git
+.github
+.agent-compose
+test
+PLAN.md
+CLAUDE.md
+.dockerignore
