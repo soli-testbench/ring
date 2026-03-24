@@ -26,3 +26,10 @@
 - **Files changed**: `.dockerignore` (new file)
 - **Tests run**: yes — 919 passed, 0 failed
 - **Outcome**: success — added .dockerignore; unable to reproduce the original Docker build failure
+
+## conflict-resolver — 2026-03-24T22:52:59Z
+
+- **Conflict**: `server/game.js` (constructor fields, NPC methods vs addBot/removeBot, comment), `test/game.test.js` (NPC bot tests vs old bot AI tests, test names, test bodies)
+- **Resolution**: Kept upstream (HEAD) NPC implementation (addNPC/removeNPC/fillWithNPCs/tickNPCs using updateNPCAI from npc.js). Dropped branch's addBot/removeBot and inline tickNPCs which were superseded by upstream's evolved NPC system. Merged constructor fields from both sides (leaderboard, registeredNicknames, machineGunPickup from upstream + npcState, nextBotNumber from branch). Removed duplicate tickNPCs method (branch's isBot-based version) that was overriding upstream's npcIds-based version and causing 2 test failures.
+- **Tests run**: yes — 1029 passed, 0 failed
+- **Outcome**: success
