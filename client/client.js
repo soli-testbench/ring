@@ -301,6 +301,45 @@ function render() {
     ctx.fill();
   }
 
+  // Draw machine gun pickup
+  if (
+    gameState.machineGunPickup &&
+    !gameState.machineGunPickup.collected
+  ) {
+    const pkx = cx + gameState.machineGunPickup.x * scale;
+    const pky = cy + gameState.machineGunPickup.y * scale;
+    const pkr = 12 * scale;
+
+    // Outer glow
+    ctx.beginPath();
+    ctx.arc(pkx, pky, pkr * 1.4, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 200, 0, 0.15)';
+    ctx.fill();
+
+    // Background circle
+    ctx.beginPath();
+    ctx.arc(pkx, pky, pkr, 0, Math.PI * 2);
+    ctx.fillStyle = '#2a2a1e';
+    ctx.strokeStyle = '#fc0';
+    ctx.lineWidth = 2;
+    ctx.fill();
+    ctx.stroke();
+
+    // Machine gun icon (three horizontal bars)
+    ctx.fillStyle = '#fc0';
+    const barW = pkr * 1.0;
+    const barH = pkr * 0.2;
+    ctx.fillRect(pkx - barW / 2, pky - barH * 2.2, barW, barH);
+    ctx.fillRect(pkx - barW / 2, pky - barH / 2, barW, barH);
+    ctx.fillRect(pkx - barW / 2, pky + barH * 1.2, barW, barH);
+
+    // Label
+    ctx.font = `${Math.max(7, pkr * 0.6)}px monospace`;
+    ctx.fillStyle = '#fc0';
+    ctx.textAlign = 'center';
+    ctx.fillText('MG', pkx, pky + pkr + Math.max(7, pkr * 0.6) + 2);
+  }
+
   // Draw players (stick figures)
   for (const player of gameState.players) {
     if (player.isSpectator) continue;
