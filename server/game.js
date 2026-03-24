@@ -578,6 +578,9 @@ class Game {
       shrinkProgress * 0.95
     );
 
+    // Check machine gun pickup collection
+    this.checkPickupCollection();
+
     // Run NPC AI (sets their input/angle/shoot before movement)
     this.tickNPCs(dt, now);
 
@@ -717,6 +720,25 @@ class Game {
     }
   }
 
+  checkPickupCollection() {
+    if (!this.machineGunPickup || this.machineGunPickup.collected) return;
+
+    for (const player of this.players.values()) {
+      if (!player.alive || this.spectators.has(player.id)) continue;
+
+      const dx = player.x - this.machineGunPickup.x;
+      const dy = player.y - this.machineGunPickup.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < PICKUP_COLLECT_RADIUS) {
+        this.machineGunPickup.collected = true;
+        this.machineGunPickup.collectedBy = player.id;
+        player.shootCooldownMs = MACHINE_GUN_COOLDOWN_MS;
+        break;
+      }
+    }
+  }
+
   getLeaderboard() {
     return this.leaderboard.getRanked();
   }
@@ -825,6 +847,13 @@ class Game {
       yourId: forPlayerId,
       isSpectator: this.spectators.has(forPlayerId),
       lobbyCountdown,
+      machineGunPickup: this.machineGunPickup
+        ? {
+            x: this.machineGunPickup.x,
+            y: this.machineGunPickup.y,
+            collected: this.machineGunPickup.collected,
+          }
+        : null,
     };
   }
 
