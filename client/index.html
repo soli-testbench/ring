@@ -172,34 +172,142 @@
     #nickname-set:hover {
       background: #3eb;
     }
+    #nickname-error {
+      color: #f44;
+      font-size: 12px;
+      margin-top: 2px;
+      display: none;
+    }
+    #tab-bar {
+      position: absolute;
+      top: 10px;
+      left: 16px;
+      z-index: 10;
+      display: flex;
+      gap: 4px;
+    }
+    .tab-btn {
+      background: #1a1a2e;
+      color: #aaa;
+      border: 1px solid #555;
+      padding: 6px 16px;
+      font-family: monospace;
+      font-size: 13px;
+      font-weight: bold;
+      border-radius: 4px 4px 0 0;
+      cursor: pointer;
+    }
+    .tab-btn:hover {
+      color: #eee;
+    }
+    .tab-btn.active {
+      background: #4fc;
+      color: #111;
+      border-color: #4fc;
+    }
+    #game-view {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    #leaderboard-view {
+      display: none;
+      width: 100%;
+      max-width: 500px;
+      margin-top: 50px;
+    }
+    #leaderboard-view h2 {
+      text-align: center;
+      color: #4fc;
+      margin-bottom: 16px;
+      font-size: 22px;
+    }
+    #leaderboard-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: monospace;
+    }
+    #leaderboard-table th {
+      background: #1a1a2e;
+      color: #4fc;
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 2px solid #4fc;
+      font-size: 14px;
+    }
+    #leaderboard-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid #333;
+      font-size: 14px;
+      color: #ccc;
+    }
+    #leaderboard-table tr:hover td {
+      background: #1a1a2e;
+    }
+    #leaderboard-table .rank-col {
+      width: 60px;
+      text-align: center;
+    }
+    #leaderboard-table .wins-col {
+      width: 80px;
+      text-align: center;
+    }
+    #leaderboard-empty {
+      text-align: center;
+      color: #666;
+      padding: 40px;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
-  <div id="hud">
-    <div class="status" id="status-text">Connecting...</div>
-    <div class="info" id="info-text"></div>
+  <div id="tab-bar">
+    <button class="tab-btn active" id="tab-game">Game</button>
+    <button class="tab-btn" id="tab-leaderboard">Leaderboard</button>
   </div>
-  <div id="nickname-container">
-    <input type="text" id="nickname-input" maxlength="16" placeholder="Enter nickname...">
-    <button id="nickname-set">Set</button>
-  </div>
-  <canvas id="game"></canvas>
-  <div id="hp-text">HP</div>
-  <div id="hp-bar-container">
-    <div id="hp-bar"></div>
-  </div>
-  <div id="controls-overlay">
-    <div id="controls-dialog">
-      <h2>Controls</h2>
-      <table>
-        <tr><td>W A S D</td><td>Move</td></tr>
-        <tr><td>Mouse</td><td>Aim</td></tr>
-        <tr><td>Left Click</td><td>Shoot</td></tr>
-      </table>
-      <button id="controls-dismiss">Got it</button>
+  <div id="game-view">
+    <div id="hud">
+      <div class="status" id="status-text">Connecting...</div>
+      <div class="info" id="info-text"></div>
     </div>
+    <div id="nickname-container">
+      <input type="text" id="nickname-input" maxlength="16" placeholder="Enter nickname...">
+      <button id="nickname-set">Set</button>
+      <div id="nickname-error"></div>
+    </div>
+    <canvas id="game"></canvas>
+    <div id="hp-text">HP</div>
+    <div id="hp-bar-container">
+      <div id="hp-bar"></div>
+    </div>
+    <div id="controls-overlay">
+      <div id="controls-dialog">
+        <h2>Controls</h2>
+        <table>
+          <tr><td>W A S D</td><td>Move</td></tr>
+          <tr><td>Mouse</td><td>Aim</td></tr>
+          <tr><td>Left Click</td><td>Shoot</td></tr>
+        </table>
+        <button id="controls-dismiss">Got it</button>
+      </div>
+    </div>
+    <div id="controls-hint">Press H for controls</div>
   </div>
-  <div id="controls-hint">Press H for controls</div>
+  <div id="leaderboard-view">
+    <h2>Global Leaderboard</h2>
+    <table id="leaderboard-table">
+      <thead>
+        <tr>
+          <th class="rank-col">Rank</th>
+          <th>Nickname</th>
+          <th class="wins-col">Wins</th>
+        </tr>
+      </thead>
+      <tbody id="leaderboard-body"></tbody>
+    </table>
+    <div id="leaderboard-empty">No matches played yet. Win a round to appear here!</div>
+  </div>
   <script src="client.js"></script>
 </body>
 </html>

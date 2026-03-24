@@ -20,6 +20,14 @@ const MIME_TYPES = {
 const clientDir = path.join(__dirname, '..', 'client');
 
 function serveStatic(req, res) {
+  // API endpoints
+  if (req.url === '/api/leaderboard' && req.method === 'GET') {
+    const data = game.getLeaderboard();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(data));
+    return;
+  }
+
   let filePath = req.url === '/' ? '/index.html' : req.url;
 
   // Prevent directory traversal
@@ -88,7 +96,15 @@ wss.on('connection', (ws) => {
       if (msg.type === 'input') {
         game.handleInput(playerId, msg);
       } else if (msg.type === 'set_name') {
-        game.setPlayerName(playerId, msg.name);
+        const result = game.setPlayerName(playerId, msg.name);
+        if (result && !result.ok) {
+          ws.send(JSON.stringify({ type: 'name_error', error: result.error }));
+        } else {
+          ws.send(JSON.stringify({ type: 'name_ok', name: msg.name }));
+        }
+      } else if (msg.type === 'get_leaderboard') {
+        const data = game.getLeaderboard();
+        ws.send(JSON.stringify({ type: 'leaderboard', data }));
       }
     } catch (e) {
       // ignore malformed messages

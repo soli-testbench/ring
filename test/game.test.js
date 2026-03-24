@@ -1086,6 +1086,276 @@ test('NPC full lifecycle: spawn, play, eliminate, reset', () => {
   assert(game.state === STATE_LOBBY, 'back to lobby');
 });
 
+// --- Leaderboard & Security Tests ---
+
+const { Leaderboard, isReservedName, validateLeaderboardData } = require('../server/leaderboard');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+function tmpLeaderboardPath() {
+  return path.join(os.tmpdir(), `lb-test-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
+}
+
+test('isReservedName rejects __proto__, constructor, prototype', () => {
+  assert(isReservedName('__proto__'), '__proto__ is reserved');
+  assert(isReservedName('constructor'), 'constructor is reserved');
+  assert(isReservedName('prototype'), 'prototype is reserved');
+  assert(isReservedName('__PROTO__'), '__PROTO__ (uppercase) is reserved');
+  assert(isReservedName('Constructor'), 'Constructor (mixed case) is reserved');
+  assert(!isReservedName('Hero'), 'Hero is not reserved');
+  assert(!isReservedName('player1'), 'player1 is not reserved');
+});
+
+test('validateLeaderboardData rejects invalid shapes', () => {
+  let result = validateLeaderboardData(null);
+  assert(Object.keys(result).length === 0, 'null returns empty');
+
+  result = validateLeaderboardData([1, 2, 3]);
+  assert(Object.keys(result).length === 0, 'array returns empty');
+
+  result = validateLeaderboardData('string');
+  assert(Object.keys(result).length === 0, 'string returns empty');
+
+  result = validateLeaderboardData({ valid: { wins: 5 }, bad: 'string', ugly: { wins: -1 } });
+  assert('valid' in result, 'keeps valid entry');
+  assert(result.valid.wins === 5, 'valid entry has correct wins');
+  assert(!('bad' in result), 'rejects string value');
+  assert(!('ugly' in result), 'rejects negative wins');
+});
+
+test('validateLeaderboardData strips __proto__ key', () => {
+  const raw = { 'Hero': { wins: 3 }, '__proto__': { wins: 999 } };
+  const result = validateLeaderboardData(raw);
+  assert('Hero' in result, 'Hero preserved');
+  assert(!('__proto__' in result), '__proto__ key stripped');
+});
+
+test('validateLeaderboardData floors fractional wins', () => {
+  const result = validateLeaderboardData({ 'Ace': { wins: 3.7 } });
+  assert(result.Ace.wins === 3, 'wins floored to integer');
+});
+
+test('setPlayerName rejects reserved names like __proto__', () => {
+  const game = new Game();
+  const mockWs = { readyState: 1, send: () => {} };
+  const id = game.addPlayer(mockWs);
+  const result = game.setPlayerName(id, '__proto__');
+  assert(!result.ok, '__proto__ rejected');
+  assert(result.error === 'That nickname is not allowed', 'correct error message');
+  assert(game.players.get(id).name === `Player ${id}`, 'name unchanged');
+});
+
+test('setPlayerName rejects constructor as nickname', () => {
+  const game = new Game();
+  const mockWs = { readyState: 1, send: () => {} };
+  const id = game.addPlayer(mockWs);
+  const result = game.setPlayerName(id, 'Constructor');
+  assert(!result.ok, 'Constructor rejected');
+});
+
+test('Nickname uniqueness enforced among connected players', () => {
+  const game = new Game();
+  const mockWs1 = { readyState: 1, send: () => {} };
+  const mockWs2 = { readyState: 1, send: () => {} };
+  const id1 = game.addPlayer(mockWs1);
+  const id2 = game.addPlayer(mockWs2);
+
+  const r1 = game.setPlayerName(id1, 'Hero');
+  assert(r1.ok, 'first player sets Hero');
+
+  const r2 = game.setPlayerName(id2, 'Hero');
+  assert(!r2.ok, 'second player cannot use Hero');
+  assert(r2.error === 'Nickname already taken', 'correct error');
+});
+
+test('Nickname uniqueness is case-insensitive among connected players', () => {
+  const game = new Game();
+  const mockWs1 = { readyState: 1, send: () => {} };
+  const mockWs2 = { readyState: 1, send: () => {} };
+  const id1 = game.addPlayer(mockWs1);
+  const id2 = game.addPlayer(mockWs2);
+
+  game.setPlayerName(id1, 'hero');
+  const r2 = game.setPlayerName(id2, 'HERO');
+  assert(!r2.ok, 'case-insensitive duplicate rejected');
+});
+
+test('Player can re-set their own nickname', () => {
+  const game = new Game();
+  const mockWs = { readyState: 1, send: () => {} };
+  const id = game.addPlayer(mockWs);
+
+  const r1 = game.setPlayerName(id, 'Hero');
+  assert(r1.ok, 'first set succeeds');
+  const r2 = game.setPlayerName(id, 'Hero');
+  assert(r2.ok, 'same player can re-set same name');
+});
+
+test('Nickname freed after player disconnects (no leaderboard entry)', () => {
+  const game = new Game();
+  // Stub checkLobbyStart which is monkey-patched at runtime in server/index.js
+  game.checkLobbyStart = () => {};
+  const mockWs1 = { readyState: 1, send: () => {} };
+  const mockWs2 = { readyState: 1, send: () => {} };
+  const id1 = game.addPlayer(mockWs1);
+  game.setPlayerName(id1, 'Hero');
+  game.removePlayer(id1);
+
+  const id2 = game.addPlayer(mockWs2);
+  const r2 = game.setPlayerName(id2, 'Hero');
+  // Since no win was recorded, 'Hero' isn't in leaderboard, so it should succeed.
+  assert(r2.ok, 'name freed after disconnect (no leaderboard entry)');
+});
+
+test('Nickname NOT freed after disconnect if in leaderboard (global uniqueness)', () => {
+  const game = new Game();
+  game.checkLobbyStart = () => {};
+  const mockWs1 = { readyState: 1, send: () => {} };
+  const mockWs2 = { readyState: 1, send: () => {} };
+  const id1 = game.addPlayer(mockWs1);
+  game.setPlayerName(id1, 'Hero');
+  // Simulate Hero having won before — now in leaderboard
+  game.leaderboard.data['Hero'] = { wins: 3 };
+  game.removePlayer(id1);
+
+  const id2 = game.addPlayer(mockWs2);
+  const r2 = game.setPlayerName(id2, 'Hero');
+  assert(!r2.ok, 'leaderboard name blocked after disconnect');
+  assert(r2.error === 'Nickname already taken', 'correct error for persisted identity');
+});
+
+test('Global nickname uniqueness: name in leaderboard cannot be taken by different player', () => {
+  const game = new Game();
+  // Manually seed leaderboard with a persisted identity
+  game.leaderboard.data['Champion'] = { wins: 10 };
+
+  const mockWs = { readyState: 1, send: () => {} };
+  const id = game.addPlayer(mockWs);
+  const result = game.setPlayerName(id, 'Champion');
+  assert(!result.ok, 'cannot take persisted leaderboard name');
+  assert(result.error === 'Nickname already taken', 'correct error for global uniqueness');
+});
+
+test('Global nickname uniqueness is case-insensitive', () => {
+  const game = new Game();
+  game.leaderboard.data['Champion'] = { wins: 10 };
+
+  const mockWs = { readyState: 1, send: () => {} };
+  const id = game.addPlayer(mockWs);
+  const result = game.setPlayerName(id, 'champion');
+  assert(!result.ok, 'case-insensitive match against leaderboard');
+});
+
+test('Player who owns a leaderboard name can reclaim it', () => {
+  const game = new Game();
+  game.leaderboard.data['Hero'] = { wins: 5 };
+
+  const mockWs = { readyState: 1, send: () => {} };
+  const id = game.addPlayer(mockWs);
+  // First register the name (simulating the player claiming their identity)
+  game.registeredNicknames.set('hero', id);
+  const result = game.setPlayerName(id, 'Hero');
+  assert(result.ok, 'player can reclaim their own leaderboard name');
+});
+
+test('Win is recorded in leaderboard when round ends', () => {
+  const game = new Game();
+  const mockWs1 = { readyState: 1, send: () => {} };
+  const mockWs2 = { readyState: 1, send: () => {} };
+  const id1 = game.addPlayer(mockWs1);
+  const id2 = game.addPlayer(mockWs2);
+  game.setPlayerName(id1, 'Winner');
+
+  game.startRound();
+  const p2 = game.players.get(id2);
+  p2.hp = 0;
+  p2.alive = false;
+  game.checkWinCondition();
+
+  assert(game.state === STATE_ROUND_END, 'round ended');
+  assert(game.winnerId === id1, 'player 1 wins');
+  assert('Winner' in game.leaderboard.data, 'Winner in leaderboard');
+  assert(game.leaderboard.data['Winner'].wins === 1, 'wins count is 1');
+});
+
+test('Leaderboard getRanked returns sorted results', () => {
+  const game = new Game();
+  // Reset leaderboard data to isolate this test
+  game.leaderboard.data = Object.create(null);
+  game.leaderboard.data['Ace'] = { wins: 10 };
+  game.leaderboard.data['Bob'] = { wins: 5 };
+  game.leaderboard.data['Cat'] = { wins: 15 };
+
+  const ranked = game.getLeaderboard();
+  assert(ranked.length === 3, '3 entries');
+  assert(ranked[0].nickname === 'Cat', 'Cat is rank 1');
+  assert(ranked[0].rank === 1, 'rank 1');
+  assert(ranked[0].wins === 15, '15 wins');
+  assert(ranked[1].nickname === 'Ace', 'Ace is rank 2');
+  assert(ranked[2].nickname === 'Bob', 'Bob is rank 3');
+});
+
+test('Leaderboard recordWin ignores reserved names', () => {
+  const game = new Game();
+  game.leaderboard.recordWin('__proto__');
+  assert(!('__proto__' in game.leaderboard.data), '__proto__ not recorded');
+  game.leaderboard.recordWin('constructor');
+  assert(!('constructor' in game.leaderboard.data), 'constructor not recorded');
+});
+
+test('NPC wins are not recorded in leaderboard', () => {
+  const game = new Game();
+  const mockWs1 = { readyState: 1, send: () => {} };
+  const mockWs2 = { readyState: 1, send: () => {} };
+  const id1 = game.addPlayer(mockWs1);
+  const id2 = game.addPlayer(mockWs2);
+  const npcId = game.addNPC();
+
+  game.startRound();
+  // Kill real players, NPC survives
+  for (const p of game.players.values()) {
+    if (p.id !== npcId) {
+      p.hp = 0;
+      p.alive = false;
+    }
+  }
+  game.checkWinCondition();
+  assert(game.winnerId === npcId, 'NPC wins');
+  const ranked = game.getLeaderboard();
+  const npc = game.players.get(npcId);
+  const npcInLb = ranked.find(e => e.nickname === npc.name);
+  assert(!npcInLb, 'NPC not in leaderboard');
+});
+
+test('Leaderboard persistence: file round-trip with validated data', () => {
+  const tmpPath = tmpLeaderboardPath();
+  // Write valid data
+  fs.writeFileSync(tmpPath, JSON.stringify({ 'Ace': { wins: 3 }, 'Bob': { wins: 7 } }));
+  const lb = new Leaderboard(tmpPath);
+  assert(lb.data['Ace'].wins === 3, 'Ace loaded with 3 wins');
+  assert(lb.data['Bob'].wins === 7, 'Bob loaded with 7 wins');
+  // Clean up
+  try { fs.unlinkSync(tmpPath); } catch (e) {}
+});
+
+test('Leaderboard persistence: corrupted file starts fresh', () => {
+  const tmpPath = tmpLeaderboardPath();
+  fs.writeFileSync(tmpPath, 'not json!!!');
+  const lb = new Leaderboard(tmpPath);
+  assert(Object.keys(lb.data).length === 0, 'corrupted file yields empty data');
+  try { fs.unlinkSync(tmpPath); } catch (e) {}
+});
+
+test('Leaderboard hasNickname is case-insensitive', () => {
+  const lb = new Leaderboard(tmpLeaderboardPath());
+  lb.data['Champion'] = { wins: 5 };
+  assert(lb.hasNickname('Champion'), 'exact match');
+  assert(lb.hasNickname('champion'), 'lowercase match');
+  assert(lb.hasNickname('CHAMPION'), 'uppercase match');
+  assert(!lb.hasNickname('Champ'), 'partial no match');
+});
+
 // --- Summary ---
 console.log(`\n${'='.repeat(40)}`);
 console.log(`Results: ${passed} passed, ${failed} failed`);
