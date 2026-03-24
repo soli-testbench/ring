@@ -16,7 +16,7 @@
             "Export all new constants in module.exports",
             "Verify file parses without syntax errors: node -c server/game.js"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "t2",
@@ -27,7 +27,7 @@
             "Implement removeBot(id) that removes from players, npcState, and spectators",
             "Run npm test to verify existing tests still pass"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "t3",
@@ -39,7 +39,7 @@
             "Reset bot npcState in startRound() and resetForNextRound()",
             "Run npm test to verify existing tests still pass"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "t4",
@@ -48,7 +48,7 @@
             "In getState(), add isBot: !!p.isBot to each player in the serialized state",
             "Verify state output includes isBot field"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "t5",
@@ -58,7 +58,7 @@
             "After game.start(), loop NPC_COUNT times calling game.addBot()",
             "Run npm test to ensure no regressions"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "t6",
@@ -75,7 +75,7 @@
             "Test isBot appears in getState() serialization",
             "Run npm test — all existing 889 + new tests must pass"
           ],
-          "passes": false
+          "passes": true
         }
       ],
       "quality_checklist": [
@@ -87,7 +87,7 @@
             "Verify NPC_SHOOT_ANGLE_TOLERANCE = 0.55 (not 0.3)",
             "Verify NPC_REACTION_DELAY_MS = 400 (within 300-500ms range)"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "q2",
@@ -97,7 +97,7 @@
             "Verify addBot does not interfere with addPlayer for human connections",
             "Verify all 889 existing tests pass unchanged"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "q3",
@@ -107,7 +107,7 @@
             "Verify bot logic is contained within Game class methods",
             "Check that no unused code or commented-out code remains"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "q4",
@@ -118,7 +118,7 @@
             "Verify consistent indentation (2-space) and semicolons match existing style",
             "Check that new exports follow the existing module.exports pattern"
           ],
-          "passes": false
+          "passes": true
         }
       ]
     }
@@ -139,7 +139,7 @@
           "Verify 889+ tests pass with 0 failures",
           "Verify new bot-specific tests are present and passing"
         ],
-        "passes": false
+        "passes": true
       },
       {
         "id": "v2",
@@ -150,7 +150,7 @@
           "Connect via browser to http://localhost:8080",
           "Verify bots appear as players in the lobby"
         ],
-        "passes": false
+        "passes": true
       },
       {
         "id": "v3",
@@ -162,7 +162,7 @@
           "Observe that bots only engage at close range (reduced shoot range)",
           "Verify bots still move, shoot, and avoid the ring"
         ],
-        "passes": false
+        "passes": true
       }
     ]
   }
