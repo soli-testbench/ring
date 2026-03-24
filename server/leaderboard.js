@@ -80,7 +80,8 @@ class Leaderboard {
     }
     this._saving = true;
 
-    const tmpFile = this.filePath + '.tmp.' + process.pid;
+    const uniqueSuffix = process.pid + '.' + Date.now() + '.' + Math.random().toString(36).slice(2, 8);
+    const tmpFile = this.filePath + '.tmp.' + uniqueSuffix;
     const content = JSON.stringify(this.data, null, 2);
 
     fs.writeFile(tmpFile, content, 'utf-8', (writeErr) => {
