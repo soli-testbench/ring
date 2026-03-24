@@ -567,7 +567,6 @@ class Game {
         index++;
       }
     }
-
   }
 
   tickActive(dt, now) {
