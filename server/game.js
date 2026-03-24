@@ -22,6 +22,15 @@ const MIN_PLAYERS_TO_START = 2;
 const TICK_RATE = 20; // ticks per second
 const TICK_INTERVAL_MS = 1000 / TICK_RATE;
 
+// --- NPC Bot Constants ---
+const NPC_SHOOT_RANGE = 180;
+const NPC_SHOOT_ANGLE_TOLERANCE = 0.55; // radians (~31°)
+const NPC_REACTION_DELAY_MS = 400;
+const NPC_STRAFE_RANGE = 80;
+const NPC_RING_SAFETY_MARGIN = 50;
+const NPC_WANDER_INTERVAL_MS = 2000;
+const NPC_COUNT = 3;
+
 // --- Polygon Geometry Utilities ---
 
 function convexHull(points) {
@@ -868,4 +877,11 @@ module.exports = {
   scalePolygonTowardCentroid,
   pointInConvexPolygon,
   clampPointToPolygon,
+  NPC_SHOOT_RANGE,
+  NPC_SHOOT_ANGLE_TOLERANCE,
+  NPC_REACTION_DELAY_MS,
+  NPC_STRAFE_RANGE,
+  NPC_RING_SAFETY_MARGIN,
+  NPC_WANDER_INTERVAL_MS,
+  NPC_COUNT,
 };
