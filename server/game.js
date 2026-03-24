@@ -232,6 +232,7 @@ class Game {
     this.onBroadcast = null; // callback for broadcasting state
     this.leaderboard = new Leaderboard();
     this.registeredNicknames = new Map(); // nickname (lowercase) -> playerId
+    this.machineGunPickup = null; // { x, y, collected, collectedBy }
   }
 
   start() {
@@ -480,7 +481,8 @@ class Game {
 
   tryShoot(player) {
     const now = Date.now();
-    if (now - player.lastShot < SHOOT_COOLDOWN_MS) return;
+    const cooldown = player.shootCooldownMs || SHOOT_COOLDOWN_MS;
+    if (now - player.lastShot < cooldown) return;
     player.lastShot = now;
 
     const bullet = {
@@ -554,9 +556,23 @@ class Game {
         player.hp = PLAYER_MAX_HP;
         player.alive = true;
         player.lastShot = 0;
+        player.shootCooldownMs = SHOOT_COOLDOWN_MS;
         index++;
       }
     }
+
+    // Spawn machine gun pickup at a random position inside the arena
+    const pickupPos = randomPointInPolygon(
+      this.arenaVertices,
+      this.arenaCentroid,
+      0.6
+    );
+    this.machineGunPickup = {
+      x: pickupPos.x,
+      y: pickupPos.y,
+      collected: false,
+      collectedBy: null,
+    };
   }
 
   tickActive(dt, now) {
@@ -568,6 +584,9 @@ class Game {
       this.arenaCentroid,
       shrinkProgress * 0.95
     );
+
+    // Check machine gun pickup collection
+    this.checkPickupCollection();
 
     // Run NPC AI (sets their input/angle/shoot before movement)
     this.tickNPCs(dt, now);
@@ -667,6 +686,25 @@ class Game {
     }
   }
 
+  checkPickupCollection() {
+    if (!this.machineGunPickup || this.machineGunPickup.collected) return;
+
+    for (const player of this.players.values()) {
+      if (!player.alive || this.spectators.has(player.id)) continue;
+
+      const dx = player.x - this.machineGunPickup.x;
+      const dy = player.y - this.machineGunPickup.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < PLAYER_RADIUS) {
+        this.machineGunPickup.collected = true;
+        this.machineGunPickup.collectedBy = player.id;
+        player.shootCooldownMs = SHOOT_COOLDOWN_MS * 0.5;
+        break;
+      }
+    }
+  }
+
   checkWinCondition() {
     const alive = this.getAlivePlayers();
 
@@ -712,6 +750,7 @@ class Game {
     this.winnerId = null;
     this.lobbyCountdownStart = 0;
     this.roundParticipants = 0;
+    this.machineGunPickup = null;
 
     // Move spectators back to active players
     this.spectators.clear();
@@ -727,6 +766,7 @@ class Game {
       player.alive = true;
       player.lastShot = 0;
       player.input = { up: false, down: false, left: false, right: false };
+      player.shootCooldownMs = SHOOT_COOLDOWN_MS;
       index++;
     }
   }
@@ -789,6 +829,13 @@ class Game {
       yourId: forPlayerId,
       isSpectator: this.spectators.has(forPlayerId),
       lobbyCountdown,
+      machineGunPickup: this.machineGunPickup
+        ? {
+            x: this.machineGunPickup.x,
+            y: this.machineGunPickup.y,
+            collected: this.machineGunPickup.collected,
+          }
+        : null,
     };
   }
 
