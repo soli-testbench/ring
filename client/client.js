@@ -301,6 +301,11 @@ function render() {
     ctx.fill();
   }
 
+  // Draw machine gun pickup
+  if (gameState.machineGunPickup && !gameState.machineGunPickup.collected) {
+    drawMachineGunPickup(gameState.machineGunPickup, scale, cx, cy);
+  }
+
   // Draw players (stick figures)
   for (const player of gameState.players) {
     if (player.isSpectator) continue;
@@ -308,6 +313,67 @@ function render() {
   }
 
   requestAnimationFrame(render);
+}
+
+function drawMachineGunPickup(pickup, scale, cx, cy) {
+  const px = cx + pickup.x * scale;
+  const py = cy + pickup.y * scale;
+  const r = 12 * scale;
+
+  ctx.save();
+
+  // Outer glow
+  ctx.beginPath();
+  ctx.arc(px, py, r * 1.4, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255, 165, 0, 0.15)';
+  ctx.fill();
+
+  // Background circle
+  ctx.beginPath();
+  ctx.arc(px, py, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#1a1a2e';
+  ctx.strokeStyle = '#f80';
+  ctx.lineWidth = 2;
+  ctx.fill();
+  ctx.stroke();
+
+  // Gun icon (simplified): barrel + grip
+  ctx.strokeStyle = '#ff0';
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+
+  // Barrel (horizontal line)
+  ctx.beginPath();
+  ctx.moveTo(px - r * 0.5, py - r * 0.15);
+  ctx.lineTo(px + r * 0.6, py - r * 0.15);
+  ctx.stroke();
+
+  // Grip (short vertical line down)
+  ctx.beginPath();
+  ctx.moveTo(px - r * 0.1, py - r * 0.15);
+  ctx.lineTo(px - r * 0.1, py + r * 0.35);
+  ctx.stroke();
+
+  // Muzzle flash lines
+  ctx.strokeStyle = '#f80';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(px + r * 0.6, py - r * 0.15);
+  ctx.lineTo(px + r * 0.85, py - r * 0.3);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(px + r * 0.6, py - r * 0.15);
+  ctx.lineTo(px + r * 0.85, py);
+  ctx.stroke();
+
+  // Label
+  const fontSize = Math.max(6, r * 0.5);
+  ctx.font = `bold ${fontSize}px monospace`;
+  ctx.fillStyle = '#f80';
+  ctx.textAlign = 'center';
+  ctx.fillText('MG', px, py + r + fontSize + 2);
+
+  ctx.restore();
 }
 
 function drawStickFigure(player, scale, cx, cy) {
