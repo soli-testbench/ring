@@ -923,6 +923,7 @@ class Game {
         hp: p.hp,
         alive: p.alive,
         name: p.name,
+        isBot: !!p.isBot,
         isSpectator: this.spectators.has(p.id),
         isNPC: this.npcIds.has(p.id),
       });
