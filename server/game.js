@@ -13,6 +13,8 @@ const BULLET_DAMAGE = 34; // ~3 hits to kill
 const PLAYER_MAX_HP = 100;
 const RING_DAMAGE_PER_SEC = 20;
 const SHOOT_COOLDOWN_MS = 300;
+const MACHINE_GUN_COOLDOWN_MS = 150;
+const PICKUP_COLLECT_RADIUS = PLAYER_RADIUS;
 const RING_SHRINK_DURATION_MS = 75000; // 75 seconds
 const LOBBY_COUNTDOWN_MS = 5000; // 5 second countdown after 2+ players
 const ROUND_END_DELAY_MS = 5000; // 5 seconds before resetting
@@ -232,6 +234,7 @@ class Game {
     this.onBroadcast = null; // callback for broadcasting state
     this.leaderboard = new Leaderboard();
     this.registeredNicknames = new Map(); // nickname (lowercase) -> playerId
+    this.machineGunPickup = null; // { x, y, collected, collectedBy }
   }
 
   start() {
@@ -258,6 +261,7 @@ class Game {
       lastShot: 0,
       input: { up: false, down: false, left: false, right: false },
       name: `Player ${id}`,
+      hasMachineGun: false,
     };
 
     if (this.state === STATE_ACTIVE || this.state === STATE_ROUND_END) {
@@ -480,7 +484,8 @@ class Game {
 
   tryShoot(player) {
     const now = Date.now();
-    if (now - player.lastShot < SHOOT_COOLDOWN_MS) return;
+    const cooldown = player.hasMachineGun ? MACHINE_GUN_COOLDOWN_MS : SHOOT_COOLDOWN_MS;
+    if (now - player.lastShot < cooldown) return;
     player.lastShot = now;
 
     const bullet = {
@@ -540,6 +545,10 @@ class Game {
     this.bullets = [];
     this.winnerId = null;
 
+    // Spawn machine gun pickup at a random position inside the arena
+    const pickupPos = randomPointInPolygon(this.arenaVertices, this.arenaCentroid, 0.7);
+    this.machineGunPickup = { x: pickupPos.x, y: pickupPos.y, collected: false, collectedBy: null };
+
     // Respawn all non-spectator players inside the polygon
     const totalPlayers = this.getNonSpectatorPlayers().length;
     this.roundParticipants = totalPlayers;
@@ -554,6 +563,7 @@ class Game {
         player.hp = PLAYER_MAX_HP;
         player.alive = true;
         player.lastShot = 0;
+        player.hasMachineGun = false;
         index++;
       }
     }
@@ -580,6 +590,9 @@ class Game {
 
     // Move bullets
     this.updateBullets(dt, now);
+
+    // Check machine gun pickup collection
+    this.checkPickupCollection();
 
     // Ring damage
     this.applyRingDamage(dt);
@@ -653,6 +666,25 @@ class Game {
     });
   }
 
+  checkPickupCollection() {
+    if (!this.machineGunPickup || this.machineGunPickup.collected) return;
+
+    for (const player of this.players.values()) {
+      if (!player.alive || this.spectators.has(player.id)) continue;
+
+      const dx = player.x - this.machineGunPickup.x;
+      const dy = player.y - this.machineGunPickup.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < PICKUP_COLLECT_RADIUS) {
+        this.machineGunPickup.collected = true;
+        this.machineGunPickup.collectedBy = player.id;
+        player.hasMachineGun = true;
+        break;
+      }
+    }
+  }
+
   applyRingDamage(dt) {
     for (const player of this.players.values()) {
       if (!player.alive || this.spectators.has(player.id)) continue;
@@ -712,6 +744,7 @@ class Game {
     this.winnerId = null;
     this.lobbyCountdownStart = 0;
     this.roundParticipants = 0;
+    this.machineGunPickup = null;
 
     // Move spectators back to active players
     this.spectators.clear();
@@ -726,6 +759,7 @@ class Game {
       player.hp = PLAYER_MAX_HP;
       player.alive = true;
       player.lastShot = 0;
+      player.hasMachineGun = false;
       player.input = { up: false, down: false, left: false, right: false };
       index++;
     }
@@ -785,6 +819,13 @@ class Game {
         y: b.y,
         ownerId: b.ownerId,
       })),
+      machineGunPickup: this.machineGunPickup
+        ? {
+            x: this.machineGunPickup.x,
+            y: this.machineGunPickup.y,
+            collected: this.machineGunPickup.collected,
+          }
+        : null,
       winnerId: this.winnerId,
       yourId: forPlayerId,
       isSpectator: this.spectators.has(forPlayerId),
@@ -810,6 +851,8 @@ module.exports = {
   PLAYER_MAX_HP,
   RING_DAMAGE_PER_SEC,
   SHOOT_COOLDOWN_MS,
+  MACHINE_GUN_COOLDOWN_MS,
+  PICKUP_COLLECT_RADIUS,
   RING_SHRINK_DURATION_MS,
   LOBBY_COUNTDOWN_MS,
   ROUND_END_DELAY_MS,
