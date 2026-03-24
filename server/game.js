@@ -595,6 +595,9 @@ class Game {
     // Move bullets
     this.updateBullets(dt, now);
 
+    // Check pickup collection
+    this.checkPickupCollection();
+
     // Ring damage
     this.applyRingDamage(dt);
 
@@ -667,6 +670,25 @@ class Game {
     });
   }
 
+  checkPickupCollection() {
+    if (!this.machineGunPickup || this.machineGunPickup.collected) return;
+
+    for (const player of this.players.values()) {
+      if (!player.alive || this.spectators.has(player.id)) continue;
+
+      const dx = player.x - this.machineGunPickup.x;
+      const dy = player.y - this.machineGunPickup.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < PICKUP_COLLECT_RADIUS) {
+        this.machineGunPickup.collected = true;
+        this.machineGunPickup.collectedBy = player.id;
+        player.hasMachineGun = true;
+        break;
+      }
+    }
+  }
+
   applyRingDamage(dt) {
     for (const player of this.players.values()) {
       if (!player.alive || this.spectators.has(player.id)) continue;
@@ -715,6 +737,25 @@ class Game {
         if (winner && !this.npcIds.has(this.winnerId)) {
           this.leaderboard.recordWin(winner.name);
         }
+      }
+    }
+  }
+
+  checkPickupCollection() {
+    if (!this.machineGunPickup || this.machineGunPickup.collected) return;
+
+    for (const player of this.players.values()) {
+      if (!player.alive || this.spectators.has(player.id)) continue;
+
+      const dx = player.x - this.machineGunPickup.x;
+      const dy = player.y - this.machineGunPickup.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < PICKUP_COLLECT_RADIUS) {
+        this.machineGunPickup.collected = true;
+        this.machineGunPickup.collectedBy = player.id;
+        player.shootCooldownMs = MACHINE_GUN_COOLDOWN_MS;
+        break;
       }
     }
   }
@@ -820,6 +861,9 @@ class Game {
         y: b.y,
         ownerId: b.ownerId,
       })),
+      machineGunPickup: this.machineGunPickup
+        ? { x: this.machineGunPickup.x, y: this.machineGunPickup.y, collected: this.machineGunPickup.collected }
+        : null,
       winnerId: this.winnerId,
       yourId: forPlayerId,
       isSpectator: this.spectators.has(forPlayerId),
@@ -852,6 +896,8 @@ module.exports = {
   PLAYER_MAX_HP,
   RING_DAMAGE_PER_SEC,
   SHOOT_COOLDOWN_MS,
+  MACHINE_GUN_COOLDOWN_MS,
+  PICKUP_COLLECT_RADIUS,
   RING_SHRINK_DURATION_MS,
   LOBBY_COUNTDOWN_MS,
   ROUND_END_DELAY_MS,
