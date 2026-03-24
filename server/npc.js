@@ -32,6 +32,7 @@ function createNPC(id, name) {
     input: { up: false, down: false, left: false, right: false },
     name: name,
     isNPC: true,
+    hasMachineGun: false,
     _wanderAngle: Math.random() * Math.PI * 2,
     _wanderChangeTime: 0,
   };
