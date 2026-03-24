@@ -291,6 +291,37 @@ function render() {
     ctx.stroke();
   }
 
+  // Draw machine gun pickup
+  if (gameState.machineGunPickup && !gameState.machineGunPickup.collected) {
+    const pickup = gameState.machineGunPickup;
+    const pkx = cx + pickup.x * scale;
+    const pky = cy + pickup.y * scale;
+    const pkSize = 12 * scale;
+
+    // Outer glow
+    ctx.save();
+    ctx.shadowColor = '#f80';
+    ctx.shadowBlur = 10;
+
+    // Draw ammo box shape
+    ctx.fillStyle = '#f80';
+    ctx.fillRect(pkx - pkSize, pky - pkSize * 0.7, pkSize * 2, pkSize * 1.4);
+
+    ctx.restore();
+
+    // Inner detail
+    ctx.fillStyle = '#111';
+    ctx.font = `bold ${Math.max(8, pkSize)}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('MG', pkx, pky);
+
+    // Border
+    ctx.strokeStyle = '#fc0';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(pkx - pkSize, pky - pkSize * 0.7, pkSize * 2, pkSize * 1.4);
+  }
+
   // Draw bullets
   for (const bullet of gameState.bullets) {
     const bx = cx + bullet.x * scale;
