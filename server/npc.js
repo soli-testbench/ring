@@ -31,6 +31,7 @@ function createNPC(id, name) {
     lastShot: 0,
     input: { up: false, down: false, left: false, right: false },
     name: name,
+    shootCooldown: 300,
     isNPC: true,
     _wanderAngle: Math.random() * Math.PI * 2,
     _wanderChangeTime: 0,
