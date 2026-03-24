@@ -1,0 +1,169 @@
+{
+  "quality": "full",
+  "tasks": [
+    {
+      "id": "main",
+      "title": "Add nerfed NPC bot AI system",
+      "description": "Implement server-side NPC bot AI with nerfed combat parameters: reduced shoot range (180), widened aim tolerance (0.55 rad), 400ms reaction delay on new targets. Bots should move toward enemies, strafe at close range, avoid the ring boundary, wander when idle, and shoot when conditions are met. Add bot lifecycle management in the server entry point and comprehensive tests.",
+      "acceptance_criteria": "1. NPC_SHOOT_RANGE is 180 (reduced from 250).\n2. NPC_SHOOT_ANGLE_TOLERANCE is 0.55 radians (increased from 0.3) so bots miss more often.\n3. A 400ms reaction delay exists so bots don't instantly shoot when an enemy enters range.\n4. Bots exhibit core behaviors: moving toward enemies, strafing at close range, avoiding the ring boundary, and wandering when no enemy is found.\n5. All existing 889 tests still pass.\n6. New tests cover bot spawning, shooting range limit, angle tolerance, reaction delay, ring avoidance, and wandering behavior.",
+      "claudeMd": "# Project Context\n\nYou are adding NPC bot AI to Ring - Battle Royale, a top-down multiplayer stick-figure arena game. The game is Node.js with vanilla JS client and HTML5 Canvas.\n\n## Tech Stack\n- Node.js with `ws@^8.16.0` for WebSocket\n- Vanilla JS client with HTML5 Canvas (no framework)\n- Custom test harness — `npm test` runs `node test/game.test.js` (server-side only)\n- `'use strict'` at top of each JS file\n\n## Architecture\n\nBots are server-side fake players with `ws: null` and `isBot: true`. They live in `game.players` like real players and reuse all existing infrastructure (HP, collision, ring damage, bullets). The Game class manages bot AI in a `tickNPCs()` method called from `tickActive()`.\n\n## NPC Constants (add to top of game.js after existing constants)\n\n```js\n// --- NPC Bot Constants ---\nconst NPC_SHOOT_RANGE = 180;\nconst NPC_SHOOT_ANGLE_TOLERANCE = 0.55; // radians (~31°)\nconst NPC_REACTION_DELAY_MS = 400;\nconst NPC_STRAFE_RANGE = 80;\nconst NPC_RING_SAFETY_MARGIN = 50;\nconst NPC_WANDER_INTERVAL_MS = 2000;\nconst NPC_COUNT = 3;\n```\n\n## Game Class Changes (server/game.js)\n\n### Constructor\n- Add `this.npcState = new Map();` — stores per-bot AI state: `{ lastTargetId, targetAcquiredAt, wanderAngle, lastWanderChange }`\n\n### New method: `addBot()`\n- Create a player object with `ws: null, isBot: true, name: 'Bot X'`\n- Use `this.spawnPlayer()` to place them\n- Initialize `this.npcState.set(id, { lastTargetId: null, targetAcquiredAt: 0, wanderAngle: Math.random() * Math.PI * 2, lastWanderChange: 0 })`\n- Return the bot id\n\n### New method: `removeBot(id)`\n- Remove from `this.players`, `this.npcState`, and `this.spectators`\n\n### New method: `tickNPCs(dt, now)`\n- Loop over all players where `player.isBot && player.alive`\n- For each bot:\n  1. **Ring avoidance**: Check if bot is outside `this.ringVertices` or would be within NPC_RING_SAFETY_MARGIN of ring edge. If so, set input to move toward `this.arenaCentroid`. For simplicity, approximate \"near ring edge\" by checking if the bot's position scaled 1.1x outward from centroid is outside the ring.\n  2. **Find nearest enemy**: Loop alive non-spectator players where `!p.isBot`, compute distance. Pick nearest within NPC_SHOOT_RANGE.\n  3. **Track target**: If target changed from `npcState.lastTargetId`, update `lastTargetId` and set `targetAcquiredAt = now`.\n  4. **Set aim angle**: `player.angle = Math.atan2(target.y - player.y, target.x - player.x)`\n  5. **Movement**: If distance > NPC_STRAFE_RANGE, move toward target (set input keys based on dx/dy). If distance <= NPC_STRAFE_RANGE, strafe perpendicular (pick a consistent direction per bot).\n  6. **Shooting**: If target within range AND `Math.abs(angleDiff) < NPC_SHOOT_ANGLE_TOLERANCE` AND `now - npcState.targetAcquiredAt >= NPC_REACTION_DELAY_MS`, call `this.tryShoot(player)`.\n  7. **Wandering** (no target): Every NPC_WANDER_INTERVAL_MS, pick a new random `wanderAngle`. Set input to walk in that direction.\n- Reset unused input keys to false each tick.\n\n### In `tickActive(dt, now)`\n- Add `this.tickNPCs(dt, now);` after player movement, before `updateBullets`.\n\n### In `startRound()`\n- Respawn bots same as regular players (they're already in `this.players`)\n- Reset npcState targetAcquiredAt for all bots\n\n### In `resetForNextRound()`\n- Reset npcState for all bots\n\n### In `getState(forPlayerId)`\n- Include `isBot: !!p.isBot` in the player state serialization so the client can optionally differentiate\n\n### Exports\n- Export the new NPC constants: `NPC_SHOOT_RANGE, NPC_SHOOT_ANGLE_TOLERANCE, NPC_REACTION_DELAY_MS, NPC_STRAFE_RANGE, NPC_RING_SAFETY_MARGIN, NPC_WANDER_INTERVAL_MS, NPC_COUNT`\n\n## Server Entry Point Changes (server/index.js)\n\n### After `game.start()`\n- Import NPC_COUNT from game.js\n- Spawn `NPC_COUNT` bots: `for (let i = 0; i < NPC_COUNT; i++) game.addBot();`\n- Optionally: adjust bot count when human players connect/disconnect to maintain a minimum player count. For now, just spawn a fixed number at startup — they persist across rounds.\n\n## Tests (test/game.test.js)\n\nAdd tests after existing tests, before the summary section. Import new constants.\n\n### Required test cases:\n1. `addBot()` creates a bot player with `isBot: true` and `ws: null`\n2. Bot spawns inside polygon arena\n3. Bot does NOT shoot at targets beyond NPC_SHOOT_RANGE (180)\n4. Bot does NOT shoot when angle to target exceeds NPC_SHOOT_ANGLE_TOLERANCE (0.55)\n5. Bot does NOT shoot before NPC_REACTION_DELAY_MS (400ms) after acquiring a new target\n6. Bot DOES shoot when all conditions met (within range, within angle, reaction delay passed)\n7. Bot moves toward centroid when outside ring\n8. Bot wanders when no enemy in range (input keys change over time)\n9. Bot state is serialized in getState (isBot flag present)\n10. All existing 889 tests still pass\n\n## Conventions\n- `'use strict'` at top of each JS file\n- Constants in SCREAMING_SNAKE_CASE at module top\n- Methods on Game class prototype (class syntax)\n- Custom test harness uses `assert(condition, message)` and `test(name, fn)` functions\n- Bots need mock ws: use `null` (not a mock object) since bot movement/shooting bypasses WebSocket entirely\n\n## Gotchas\n- `handleInput()` is only for human player WebSocket messages. Bots set `player.input` directly and call `tryShoot()` directly.\n- `movePlayer(player, dt)` reads `player.input` — so setting input keys on bot players works automatically.\n- The `addPlayer(ws)` method takes a ws object. `addBot()` should be a separate method that doesn't require ws.\n- Bot players should NOT be counted as spectators. When joining during an active game, bots should be spawned normally (not as spectators).\n- The `removePlayer()` method already handles cleanup of players map and spectators — `removeBot()` should also clean up `npcState`.\n- Reaction delay: track per-bot, reset when target changes. `targetAcquiredAt` should be compared against `now` parameter (not `Date.now()`) for testability.\n\n## Commands\n- Test: `npm test` (runs `node test/game.test.js`)\n- Start: `npm start` (runs `node server/index.js` on port 8080)",
+      "checklist": [
+        {
+          "id": "t1",
+          "description": "Add NPC constants to server/game.js",
+          "steps": [
+            "Add NPC_SHOOT_RANGE = 180, NPC_SHOOT_ANGLE_TOLERANCE = 0.55, NPC_REACTION_DELAY_MS = 400, NPC_STRAFE_RANGE = 80, NPC_RING_SAFETY_MARGIN = 50, NPC_WANDER_INTERVAL_MS = 2000, NPC_COUNT = 3 after existing constants",
+            "Export all new constants in module.exports",
+            "Verify file parses without syntax errors: node -c server/game.js"
+          ],
+          "passes": false
+        },
+        {
+          "id": "t2",
+          "description": "Implement addBot() and removeBot() methods on Game class",
+          "steps": [
+            "Add npcState Map to constructor",
+            "Implement addBot() that creates player with ws:null, isBot:true, named 'Bot N', spawns inside arena, and initializes npcState entry",
+            "Implement removeBot(id) that removes from players, npcState, and spectators",
+            "Run npm test to verify existing tests still pass"
+          ],
+          "passes": false
+        },
+        {
+          "id": "t3",
+          "description": "Implement tickNPCs() bot AI decision loop",
+          "steps": [
+            "Implement tickNPCs(dt, now) with ring avoidance, target finding, reaction delay tracking, aim angle, movement (approach + strafe), and shooting logic",
+            "Add wandering behavior when no target found",
+            "Call tickNPCs(dt, now) from tickActive() after player movement",
+            "Reset bot npcState in startRound() and resetForNextRound()",
+            "Run npm test to verify existing tests still pass"
+          ],
+          "passes": false
+        },
+        {
+          "id": "t4",
+          "description": "Add isBot flag to game state serialization",
+          "steps": [
+            "In getState(), add isBot: !!p.isBot to each player in the serialized state",
+            "Verify state output includes isBot field"
+          ],
+          "passes": false
+        },
+        {
+          "id": "t5",
+          "description": "Spawn bots from server/index.js on startup",
+          "steps": [
+            "Import NPC_COUNT from ./game",
+            "After game.start(), loop NPC_COUNT times calling game.addBot()",
+            "Run npm test to ensure no regressions"
+          ],
+          "passes": false
+        },
+        {
+          "id": "t6",
+          "description": "Add comprehensive bot AI tests",
+          "steps": [
+            "Import new NPC constants in test/game.test.js",
+            "Test addBot() creates player with isBot:true and ws:null inside arena",
+            "Test bot does NOT shoot beyond NPC_SHOOT_RANGE",
+            "Test bot does NOT shoot when angle exceeds NPC_SHOOT_ANGLE_TOLERANCE",
+            "Test bot does NOT shoot before NPC_REACTION_DELAY_MS on new target",
+            "Test bot DOES shoot when all conditions met",
+            "Test bot ring avoidance moves toward centroid",
+            "Test bot wanders when no target",
+            "Test isBot appears in getState() serialization",
+            "Run npm test — all existing 889 + new tests must pass"
+          ],
+          "passes": false
+        }
+      ],
+      "quality_checklist": [
+        {
+          "id": "q1",
+          "description": "NPC constants match acceptance criteria values exactly",
+          "steps": [
+            "Verify NPC_SHOOT_RANGE = 180 (not 250)",
+            "Verify NPC_SHOOT_ANGLE_TOLERANCE = 0.55 (not 0.3)",
+            "Verify NPC_REACTION_DELAY_MS = 400 (within 300-500ms range)"
+          ],
+          "passes": false
+        },
+        {
+          "id": "q2",
+          "description": "Bot AI does not break existing player behavior",
+          "steps": [
+            "Verify tickNPCs only modifies players with isBot:true",
+            "Verify addBot does not interfere with addPlayer for human connections",
+            "Verify all 889 existing tests pass unchanged"
+          ],
+          "passes": false
+        },
+        {
+          "id": "q3",
+          "description": "No over-engineering: bot code is minimal and direct",
+          "steps": [
+            "Check that no unnecessary abstractions were added (no BotAI class hierarchy, no strategy pattern)",
+            "Verify bot logic is contained within Game class methods",
+            "Check that no unused code or commented-out code remains"
+          ],
+          "passes": false
+        },
+        {
+          "id": "q4",
+          "description": "Code style matches existing codebase conventions",
+          "steps": [
+            "Verify 'use strict' preserved at file tops",
+            "Check constants use SCREAMING_SNAKE_CASE",
+            "Verify consistent indentation (2-space) and semicolons match existing style",
+            "Check that new exports follow the existing module.exports pattern"
+          ],
+          "passes": false
+        }
+      ]
+    }
+  ],
+  "integration": null,
+  "verification": {
+    "buildCommand": "npm test",
+    "runCommand": "npm start",
+    "readySignal": "Ring - Battle Royale server running",
+    "appType": "web",
+    "port": 8080,
+    "checks": [
+      {
+        "id": "v1",
+        "description": "All tests pass including new bot AI tests",
+        "steps": [
+          "Run npm test",
+          "Verify 889+ tests pass with 0 failures",
+          "Verify new bot-specific tests are present and passing"
+        ],
+        "passes": false
+      },
+      {
+        "id": "v2",
+        "description": "Server starts with bots spawned",
+        "steps": [
+          "Run npm start",
+          "Wait for 'Ring - Battle Royale server running' message",
+          "Connect via browser to http://localhost:8080",
+          "Verify bots appear as players in the lobby"
+        ],
+        "passes": false
+      },
+      {
+        "id": "v3",
+        "description": "Bots are noticeably easier opponents",
+        "steps": [
+          "Start a round with bots",
+          "Observe that bots do not shoot immediately when entering range (reaction delay visible)",
+          "Observe that bots miss frequently (wide angle tolerance)",
+          "Observe that bots only engage at close range (reduced shoot range)",
+          "Verify bots still move, shoot, and avoid the ring"
+        ],
+        "passes": false
+      }
+    ]
+  }
+}
