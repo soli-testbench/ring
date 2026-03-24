@@ -293,9 +293,8 @@ function render() {
 
   // Draw machine gun pickup
   if (gameState.machineGunPickup && !gameState.machineGunPickup.collected) {
-    const pickup = gameState.machineGunPickup;
-    const pkx = cx + pickup.x * scale;
-    const pky = cy + pickup.y * scale;
+    const pkx = cx + gameState.machineGunPickup.x * scale;
+    const pky = cy + gameState.machineGunPickup.y * scale;
     const pkSize = 12 * scale;
 
     // Outer glow
@@ -303,23 +302,26 @@ function render() {
     ctx.shadowColor = '#f80';
     ctx.shadowBlur = 10;
 
-    // Draw ammo box shape
+    // Draw a small ammo/gun icon: rectangle body + barrel
     ctx.fillStyle = '#f80';
-    ctx.fillRect(pkx - pkSize, pky - pkSize * 0.7, pkSize * 2, pkSize * 1.4);
+    ctx.strokeStyle = '#fc0';
+    ctx.lineWidth = 1.5;
+
+    // Gun body (rectangle)
+    ctx.fillRect(pkx - pkSize * 0.5, pky - pkSize * 0.25, pkSize, pkSize * 0.5);
+    ctx.strokeRect(pkx - pkSize * 0.5, pky - pkSize * 0.25, pkSize, pkSize * 0.5);
+
+    // Barrel (small rectangle extending right)
+    ctx.fillRect(pkx + pkSize * 0.5, pky - pkSize * 0.1, pkSize * 0.4, pkSize * 0.2);
+    ctx.strokeRect(pkx + pkSize * 0.5, pky - pkSize * 0.1, pkSize * 0.4, pkSize * 0.2);
 
     ctx.restore();
 
-    // Inner detail
-    ctx.fillStyle = '#111';
-    ctx.font = `bold ${Math.max(8, pkSize)}px monospace`;
+    // Label
+    ctx.font = `${Math.max(7, pkSize * 0.5)}px monospace`;
+    ctx.fillStyle = '#fc0';
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('MG', pkx, pky);
-
-    // Border
-    ctx.strokeStyle = '#fc0';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(pkx - pkSize, pky - pkSize * 0.7, pkSize * 2, pkSize * 1.4);
+    ctx.fillText('MG', pkx, pky - pkSize * 0.5);
   }
 
   // Draw bullets
