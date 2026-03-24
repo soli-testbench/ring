@@ -11,10 +11,11 @@ const MAX_NPC_COUNT = 4; // max bots per match
 const MIN_REAL_PLAYERS_FOR_NO_BOTS = 4; // no bots when this many real players
 
 // AI behavior constants
-const NPC_SHOOT_RANGE = 250; // distance within which NPC will try to shoot
-const NPC_SHOOT_ANGLE_TOLERANCE = 0.3; // radians (~17 degrees)
+const NPC_SHOOT_RANGE = 190; // distance within which NPC will try to shoot (nerfed from 250)
+const NPC_SHOOT_ANGLE_TOLERANCE = 0.55; // radians (~31 degrees) — wider tolerance means less accurate (nerfed from 0.3)
 const NPC_RING_DANGER_MARGIN = 50; // start moving inward when this close to ring edge
 const NPC_WANDER_CHANGE_INTERVAL = 2000; // ms between wander direction changes
+const NPC_REACTION_DELAY = 400; // ms before NPC starts shooting at a newly spotted enemy
 
 /**
  * Create an NPC player object (no WebSocket).
@@ -35,6 +36,8 @@ function createNPC(id, name) {
     hasMachineGun: false,
     _wanderAngle: Math.random() * Math.PI * 2,
     _wanderChangeTime: 0,
+    _currentTargetId: null,
+    _targetAcquiredTime: 0,
   };
 }
 
@@ -113,16 +116,26 @@ function updateNPCAI(npc, game, dt, now) {
         targetY = npc.y + Math.sin(perpAngle) * 50;
       }
 
-      // Shoot if within range and roughly facing the enemy
+      // Track target acquisition for reaction delay
+      if (npc._currentTargetId !== nearestEnemy.id) {
+        npc._currentTargetId = nearestEnemy.id;
+        npc._targetAcquiredTime = now;
+      }
+
+      // Shoot if within range, roughly facing the enemy, and reaction delay has elapsed
       if (nearestDist < NPC_SHOOT_RANGE) {
         const angleToEnemy = Math.atan2(dy, dx);
         let angleDiff = Math.abs(npc.angle - angleToEnemy);
         if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
-        if (angleDiff < NPC_SHOOT_ANGLE_TOLERANCE) {
+        if (angleDiff < NPC_SHOOT_ANGLE_TOLERANCE && (now - npc._targetAcquiredTime) >= NPC_REACTION_DELAY) {
           shouldShoot = true;
         }
       }
     } else {
+      // No enemy in sight — clear target tracking
+      npc._currentTargetId = null;
+      npc._targetAcquiredTime = 0;
+
       // 3. No enemy found — wander toward centroid with some randomness
       if (now - npc._wanderChangeTime > NPC_WANDER_CHANGE_INTERVAL) {
         npc._wanderAngle = Math.atan2(
@@ -168,6 +181,7 @@ module.exports = {
   MIN_REAL_PLAYERS_FOR_NO_BOTS,
   NPC_SHOOT_RANGE,
   NPC_SHOOT_ANGLE_TOLERANCE,
+  NPC_REACTION_DELAY,
   createNPC,
   pickNPCName,
   updateNPCAI,
