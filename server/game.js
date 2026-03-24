@@ -566,6 +566,15 @@ class Game {
         index++;
       }
     }
+
+    // Spawn machine gun pickup at a random position inside the arena
+    const pickupPos = randomPointInPolygon(this.arenaVertices, this.arenaCentroid, 0.7);
+    this.machineGunPickup = {
+      x: pickupPos.x,
+      y: pickupPos.y,
+      collected: false,
+      collectedBy: null,
+    };
   }
 
   tickActive(dt, now) {
@@ -698,6 +707,25 @@ class Game {
     }
   }
 
+  checkPickupCollection() {
+    if (!this.machineGunPickup || this.machineGunPickup.collected) return;
+
+    for (const player of this.players.values()) {
+      if (!player.alive || this.spectators.has(player.id)) continue;
+
+      const dx = player.x - this.machineGunPickup.x;
+      const dy = player.y - this.machineGunPickup.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < PICKUP_COLLECT_RADIUS) {
+        this.machineGunPickup.collected = true;
+        this.machineGunPickup.collectedBy = player.id;
+        player.shootCooldownMs = MACHINE_GUN_COOLDOWN_MS;
+        break;
+      }
+    }
+  }
+
   checkWinCondition() {
     const alive = this.getAlivePlayers();
 
@@ -825,6 +853,13 @@ class Game {
       yourId: forPlayerId,
       isSpectator: this.spectators.has(forPlayerId),
       lobbyCountdown,
+      machineGunPickup: this.machineGunPickup
+        ? {
+            x: this.machineGunPickup.x,
+            y: this.machineGunPickup.y,
+            collected: this.machineGunPickup.collected,
+          }
+        : null,
     };
   }
 
