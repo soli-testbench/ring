@@ -33,3 +33,11 @@
 - **Resolution**: Kept upstream (HEAD) NPC implementation (addNPC/removeNPC/fillWithNPCs/tickNPCs using updateNPCAI from npc.js). Dropped branch's addBot/removeBot and inline tickNPCs which were superseded by upstream's evolved NPC system. Merged constructor fields from both sides (leaderboard, registeredNicknames, machineGunPickup from upstream + npcState, nextBotNumber from branch). Removed duplicate tickNPCs method (branch's isBot-based version) that was overriding upstream's npcIds-based version and causing 2 test failures.
 - **Tests run**: yes — 1029 passed, 0 failed
 - **Outcome**: success
+
+## security-fixer — 2026-03-24T23:43:00Z
+
+- **Feedback**: Security review rejected: startup crash (addBot undefined), duplicate tickNPCs (isBot vs isNPC mismatch), un-nerfed constants in npc.js, duplicate constants across files, out-of-scope CI changes
+- **Actions taken**: (1) Fixed server/index.js: changed game.addBot() to game.addNPC() to prevent TypeError on startup. (2) Removed duplicate tickNPCs method from game.js (line 627) that checked player.isBot instead of npcIds—this override disabled the correct npcIds-based tickNPCs at line 401. (3) Applied nerf parameters in npc.js: NPC_SHOOT_RANGE 250→180, NPC_SHOOT_ANGLE_TOLERANCE 0.3→0.55, added NPC_REACTION_DELAY_MS=400. (4) Added aim jitter and reaction delay logic to updateNPCAI in npc.js. (5) Consolidated constants: game.js now imports NPC_SHOOT_RANGE/NPC_SHOOT_ANGLE_TOLERANCE/NPC_REACTION_DELAY_MS from npc.js. (6) Removed dead setInputFromDirection helper. Did NOT modify .github/workflows/ (fork PAT lacks workflow scope).
+- **Files changed**: `server/index.js`, `server/game.js`, `server/npc.js`
+- **Tests run**: yes — 1029 passed, 0 failed
+- **Outcome**: success
