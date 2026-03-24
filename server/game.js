@@ -567,6 +567,19 @@ class Game {
         index++;
       }
     }
+
+    // Spawn machine gun pickup at a random position inside the arena
+    const pickupPos = randomPointInPolygon(
+      this.arenaVertices,
+      this.arenaCentroid,
+      0.6
+    );
+    this.machineGunPickup = {
+      x: pickupPos.x,
+      y: pickupPos.y,
+      collected: false,
+      collectedBy: null,
+    };
   }
 
   tickActive(dt, now) {
@@ -761,6 +774,7 @@ class Game {
       player.lastShot = 0;
       player.hasMachineGun = false;
       player.input = { up: false, down: false, left: false, right: false };
+      player.shootCooldownMs = SHOOT_COOLDOWN_MS;
       index++;
     }
   }
