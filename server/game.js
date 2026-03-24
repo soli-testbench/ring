@@ -27,7 +27,6 @@ const NPC_SHOOT_RANGE = 180;
 const NPC_SHOOT_ANGLE_TOLERANCE = 0.55; // radians (~31°)
 const NPC_REACTION_DELAY_MS = 400;
 const NPC_STRAFE_RANGE = 80;
-const NPC_RING_SAFETY_MARGIN = 50;
 const NPC_WANDER_INTERVAL_MS = 2000;
 const NPC_COUNT = 3;
 
@@ -674,11 +673,11 @@ class Game {
           state.targetAcquiredAt = now;
         }
 
-        // 4. Set aim angle
+        // 4. Set aim angle with jitter (NPC_SHOOT_ANGLE_TOLERANCE makes bots inaccurate)
         const dx = target.x - player.x;
         const dy = target.y - player.y;
         const angleToTarget = Math.atan2(dy, dx);
-        player.angle = angleToTarget;
+        player.angle = angleToTarget + (Math.random() - 0.5) * NPC_SHOOT_ANGLE_TOLERANCE;
 
         // 5. Movement: approach or strafe
         if (targetDist > NPC_STRAFE_RANGE) {
@@ -693,7 +692,6 @@ class Game {
         }
 
         // 6. Shooting: check reaction delay
-        // (angle tolerance is inherently satisfied — player.angle is set to angleToTarget above)
         if (now - state.targetAcquiredAt >= NPC_REACTION_DELAY_MS) {
           this.tryShoot(player);
         }
@@ -993,7 +991,6 @@ module.exports = {
   NPC_SHOOT_ANGLE_TOLERANCE,
   NPC_REACTION_DELAY_MS,
   NPC_STRAFE_RANGE,
-  NPC_RING_SAFETY_MARGIN,
   NPC_WANDER_INTERVAL_MS,
   NPC_COUNT,
 };
