@@ -135,6 +135,41 @@
     #controls-hint:hover {
       color: #aaa;
     }
+    #kill-feed {
+      position: absolute;
+      top: 44px;
+      right: 16px;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+      max-width: 300px;
+    }
+    .kill-feed-entry {
+      background: rgba(0, 0, 0, 0.7);
+      border-left: 3px solid #f44;
+      padding: 4px 10px;
+      font-family: monospace;
+      font-size: 12px;
+      color: #eee;
+      white-space: nowrap;
+      border-radius: 2px;
+      transition: opacity 0.5s ease-out;
+    }
+    .kill-feed-entry .killer-name {
+      color: #f44;
+      font-weight: bold;
+    }
+    .kill-feed-entry .victim-name {
+      color: #4fc;
+      font-weight: bold;
+    }
+    .kill-feed-entry .ring-cause {
+      color: #f80;
+      font-weight: bold;
+    }
     #nickname-container {
       position: absolute;
       top: 10px;
@@ -271,6 +306,7 @@
       <div class="status" id="status-text">Connecting...</div>
       <div class="info" id="info-text"></div>
     </div>
+    <div id="kill-feed"></div>
     <div id="nickname-container">
       <input type="text" id="nickname-input" maxlength="16" placeholder="Enter nickname...">
       <button id="nickname-set">Set</button>

@@ -41,6 +41,14 @@ let myId = null;
 let gameState = null;
 let arenaRadius = 500;
 
+// --- Kill feed state ---
+const KILL_FEED_DURATION_MS = 5000; // entries visible for 5 seconds
+const KILL_FEED_FADE_MS = 500; // fade-out duration
+const KILL_FEED_MAX_ENTRIES = 5;
+const killFeedContainer = document.getElementById('kill-feed');
+let killFeedEntries = []; // { id, killer, victim, cause, addedAt }
+let lastSeenKillEventId = 0;
+
 // --- Input state ---
 const keys = { up: false, down: false, left: false, right: false };
 let mouseX = canvasSize / 2;
@@ -103,6 +111,7 @@ function connect() {
     } else if (msg.type === 'state') {
       gameState = msg;
       updateHUD();
+      processKillFeed(msg.killFeed);
     } else if (msg.type === 'name_error') {
       nicknameError.textContent = msg.error;
       nicknameError.style.display = 'block';
@@ -539,5 +548,75 @@ function renderLeaderboard(data) {
     leaderboardBody.appendChild(tr);
   }
 }
+
+// --- Kill feed processing ---
+function processKillFeed(serverFeed) {
+  if (!serverFeed || !Array.isArray(serverFeed)) return;
+
+  for (const event of serverFeed) {
+    if (event.id <= lastSeenKillEventId) continue;
+    lastSeenKillEventId = event.id;
+
+    const entry = {
+      id: event.id,
+      killer: event.killer,
+      victim: event.victim,
+      cause: event.cause,
+      addedAt: Date.now(),
+    };
+    killFeedEntries.push(entry);
+
+    // Keep only the most recent entries
+    if (killFeedEntries.length > KILL_FEED_MAX_ENTRIES) {
+      killFeedEntries.shift();
+    }
+  }
+}
+
+function updateKillFeed() {
+  const now = Date.now();
+
+  // Remove expired entries
+  killFeedEntries = killFeedEntries.filter(
+    (e) => now - e.addedAt < KILL_FEED_DURATION_MS + KILL_FEED_FADE_MS
+  );
+
+  // Rebuild DOM
+  killFeedContainer.innerHTML = '';
+  for (const entry of killFeedEntries) {
+    const el = document.createElement('div');
+    el.className = 'kill-feed-entry';
+
+    if (entry.cause === 'ring') {
+      el.innerHTML =
+        '<span class="victim-name">' + escapeHtml(entry.victim) + '</span>' +
+        ' was killed by ' +
+        '<span class="ring-cause">the ring</span>';
+    } else {
+      el.innerHTML =
+        '<span class="killer-name">' + escapeHtml(entry.killer) + '</span>' +
+        ' eliminated ' +
+        '<span class="victim-name">' + escapeHtml(entry.victim) + '</span>';
+    }
+
+    // Fade out near expiry
+    const age = now - entry.addedAt;
+    if (age > KILL_FEED_DURATION_MS) {
+      const fadeProgress = (age - KILL_FEED_DURATION_MS) / KILL_FEED_FADE_MS;
+      el.style.opacity = Math.max(0, 1 - fadeProgress);
+    }
+
+    killFeedContainer.appendChild(el);
+  }
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// Update kill feed every frame
+setInterval(updateKillFeed, 100);
 
 requestAnimationFrame(render);

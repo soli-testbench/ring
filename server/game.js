@@ -235,6 +235,8 @@ class Game {
     this.leaderboard = new Leaderboard();
     this.registeredNicknames = new Map(); // nickname (lowercase) -> playerId
     this.machineGunPickup = null; // { x, y, collected, collectedBy }
+    this.killFeed = []; // array of { killer, victim, cause, timestamp }
+    this._killEventId = 0;
   }
 
   start() {
@@ -544,6 +546,7 @@ class Game {
     this.ringStartTime = Date.now();
     this.bullets = [];
     this.winnerId = null;
+    this.killFeed = [];
 
     // Spawn machine gun pickup at a random position inside the arena
     const pickupPos = randomPointInPolygon(this.arenaVertices, this.arenaCentroid, 0.7);
@@ -654,6 +657,12 @@ class Game {
           if (player.hp <= 0) {
             player.hp = 0;
             player.alive = false;
+            const killer = this.players.get(bullet.ownerId);
+            this._addKillEvent(
+              killer ? killer.name : 'Unknown',
+              player.name,
+              'combat'
+            );
           }
           return false; // bullet consumed
         }
@@ -694,8 +703,23 @@ class Game {
         if (player.hp <= 0) {
           player.hp = 0;
           player.alive = false;
+          this._addKillEvent(null, player.name, 'ring');
         }
       }
+    }
+  }
+
+  _addKillEvent(killer, victim, cause) {
+    this.killFeed.push({
+      id: ++this._killEventId,
+      killer,
+      victim,
+      cause,
+      timestamp: Date.now(),
+    });
+    // Keep only the last 10 events server-side
+    if (this.killFeed.length > 10) {
+      this.killFeed.shift();
     }
   }
 
@@ -745,6 +769,7 @@ class Game {
     this.lobbyCountdownStart = 0;
     this.roundParticipants = 0;
     this.machineGunPickup = null;
+    this.killFeed = [];
 
     // Move spectators back to active players
     this.spectators.clear();
@@ -830,6 +855,7 @@ class Game {
       yourId: forPlayerId,
       isSpectator: this.spectators.has(forPlayerId),
       lobbyCountdown,
+      killFeed: this.killFeed,
     };
   }
 
